@@ -1,0 +1,394 @@
+{{!
+// SPDX-FileCopyrightText: 2025 Marius Dege <marius.dege@basyskom.com>
+// SPDX-FileCopyrightText: 2024 Marius Dege <marius.dege@basyskom.com>
+// SPDX-FileCopyrightText: 2024 basysKom GmbH
+
+// SPDX-License-Identifier: LGPL-3.0-or-later
+}}
+
+//C
+#include "open62541/server.h"
+#include "open62541/server_config_default.h"
+{{#nodeSets}}
+#include "namespace_{{{name}}}_generated.h"
+{{#hasCustomTypes}}
+#include "types_{{{name}}}_generated.h"
+#include "types_{{{name}}}_generated_handling.h"
+{{/hasCustomTypes}}
+{{/nodeSets}}
+#include <stdio.h>
+#include <stdlib.h>
+#include <signal.h>
+
+UA_UInt16 ns[{{nsCount}}];
+
+UA_NodeId nodeArray[{{nodeCount}}];
+{{#rootNodes}}
+UA_NodeId {{{name}}}_NodeId;
+{{/rootNodes}}  
+{{#variableNodes}}
+UA_NodeId {{{name}}}_NodeId;
+{{/variableNodes}}
+{{#methodNodes}}
+UA_NodeId {{{name}}}_NodeId;
+{{/methodNodes}}
+{{#objectNodes}}
+UA_NodeId {{{name}}}_NodeId;
+{{/objectNodes}}
+
+UA_Boolean running = true;
+
+void signalHandler(int signal) {
+     printf("Shutting down server!\n");
+     running = false;
+}
+
+static UA_NodeId getNodeIdFromBrowsePath(UA_Server *server, UA_NodeId parentNodeId, UA_QualifiedName *browsePath, int pathLength) {
+    UA_BrowsePath bp;
+    UA_BrowsePath_init(&bp);
+    UA_NodeId_copy(&parentNodeId, &bp.startingNode);
+
+    bp.relativePath.elements = (UA_RelativePathElement *) UA_Array_new(pathLength, &UA_TYPES[UA_TYPES_RELATIVEPATHELEMENT]);
+
+    for (int i = 0; i < pathLength; i++) {
+        UA_RelativePathElement *rpe = &bp.relativePath.elements[i];
+        rpe->referenceTypeId = UA_NODEID_NUMERIC(0, UA_NS0ID_HIERARCHICALREFERENCES);
+        rpe->isInverse = false;
+        rpe->includeSubtypes = true;
+
+        UA_QualifiedName_copy(&browsePath[i], &rpe->targetName);
+    }
+    bp.relativePath.elementsSize = pathLength;
+
+    UA_BrowsePathResult bpr = UA_Server_translateBrowsePathToNodeIds(server, &bp);
+    UA_BrowsePath_clear(&bp);
+
+    UA_NodeId result = UA_NODEID_NULL;
+    if (bpr.statusCode == UA_STATUSCODE_GOOD && bpr.targetsSize > 0) {
+        UA_NodeId_copy(&bpr.targets[0].targetId.nodeId, &result);
+    } else {
+        printf("BrowsePath failed! statusCode: %s; StartingNode: i=%u; BrowsePath: %s\n", UA_StatusCode_name(bpr.statusCode), parentNodeId.identifier.numeric, browsePath->name.data);
+    }
+
+    UA_BrowsePathResult_clear(&bpr);
+
+    return result;
+}
+
+static UA_Boolean createOptionalChildCallback(UA_Server *server,
+                                       const UA_NodeId *sessionId,
+                                       void *sessionContext,
+                                       const UA_NodeId *sourceNodeId,
+                                       const UA_NodeId *targetParentNodeId,
+                                       const UA_NodeId *referenceTypeId) {
+    for (int i = 0; i < {{nodeCount}}; i++) {
+        if(UA_NodeId_equal(&nodeArray[i], sourceNodeId)) {
+            return UA_TRUE;
+        }
+    }
+    return UA_FALSE;
+}
+
+{{#rootNodes}}
+static void add{{{browseName}}}(UA_Server *server) {
+    UA_NodeId {{{displayName}}}TypeId = UA_NODEID_NUMERIC(ns[{{namespaceIndex}}], {{identifier}});
+
+    UA_ObjectAttributes nodeAttr = UA_ObjectAttributes_default;
+    nodeAttr.displayName = UA_LOCALIZEDTEXT("en-US", "{{{displayName}}}");
+    {{#description}}
+    nodeAttr.description = UA_LOCALIZEDTEXT("en-US", "{{description}}");
+    {{/description}}
+
+    // Save current lifecycle
+    UA_GlobalNodeLifecycle lifecycle = UA_Server_getConfig(server)->nodeLifecycle;
+    UA_Server_getConfig(server)->nodeLifecycle.createOptionalChild = createOptionalChildCallback;
+    UA_StatusCode retval = UA_Server_addObjectNode(server, {{{name}}}_NodeId,
+                                {{{parentNodeId}}},
+                                {{referenceTypeNodeId}},
+                                UA_QUALIFIEDNAME(ns[{{namespaceIndex}}], "{{{displayName}}}"),
+                                {{{displayName}}}TypeId,
+                                nodeAttr, NULL, &{{{name}}}_NodeId);
+
+    UA_Server_getConfig(server)->nodeLifecycle = lifecycle;
+
+    printf("{{{displayName}}} added to server with statuscode: %s\n", UA_StatusCode_name(retval));
+}
+{{/rootNodes}}
+
+{{#variableNodes}}
+// read{{{displayName}}} NodeId: {{nodeId}}
+static UA_StatusCode read{{{name}}}(UA_Server *server, const UA_NodeId *sessionId, void *sessionContext, const UA_NodeId *nodeId, void *nodeContext, UA_Boolean sourceTimeStamp, const UA_NumericRange *range, UA_DataValue *dataValue) {
+    {{! //TODO no callback with static values? }}
+    {{#dataType}}UA_{{dataType}} {{dataTypeVariableName}};
+    {{#definitionFields}}
+    {{#fieldValue}}
+    // {{fieldType}}
+    {{#isString}}
+    {{#singleFieldValueFlag}} 
+    {{dataTypeVariableName}} = UA_STRING("{{fieldValue}}");
+    {{/singleFieldValueFlag}}
+    {{^singleFieldValueFlag}}
+    {{dataTypeVariableName}}.{{fieldName}} = UA_STRING("{{fieldValue}}");
+    {{/singleFieldValueFlag}}
+    {{/isString}}
+    {{^isString}}
+    {{#singleFieldValueFlag}}
+    {{dataTypeVariableName}}={{fieldValue}};
+    {{/singleFieldValueFlag}}
+    {{^singleFieldValueFlag}}
+    {{dataTypeVariableName}}.{{fieldName}}={{fieldValue}};
+    {{/singleFieldValueFlag}}
+    {{/isString}}
+    {{/fieldValue}}
+    {{^fieldValue}}
+    // {{fieldName}} -> {{fieldType}}
+    {{/fieldValue}}
+    {{/definitionFields}}
+    {{#fieldsHaveValuesFlag}}
+    UA_Variant_setScalarCopy(&dataValue->value, &{{dataTypeVariableName}}, &{{typesArrayName}}[{{typesArrayIndexAlias}}]);
+    dataValue->hasValue = true;
+    {{/fieldsHaveValuesFlag}}
+    {{^fieldsHaveValuesFlag}}
+    // Set all the values accordingly and copy the data to the dataValue:
+    //UA_Variant_setScalarCopy(&dataValue->value, &{{dataTypeVariableName}}, &{{typesArrayName}}[{{typesArrayIndexAlias}}]);
+    //dataValue->hasValue = true;
+    {{/fieldsHaveValuesFlag}}
+    {{/dataType}}
+
+    //BEGIN user code read {{{name}}}
+    {{readUserCode}}
+    //END user code read {{{name}}}
+    printf("read{{{displayName}}} got called\n");
+    return UA_STATUSCODE_GOOD;
+}
+
+// write{{{displayName}}} NodeId: {{nodeId}}
+static UA_StatusCode write{{{name}}}(UA_Server *server, const UA_NodeId *sessionId, void *sessionContext, const UA_NodeId *nodeId, void *nodeContext, const UA_NumericRange *range, const UA_DataValue *data) {
+
+    {{#dataType}}
+    UA_{{dataType}} {{dataTypeVariableName}}; 
+    UA_{{dataType}}_init(&{{dataTypeVariableName}});
+    
+    if(data->value.data == NULL) {
+        // handle null value here
+    } else {
+        {{dataTypeVariableName}} = *(UA_{{dataType}}*) data->value.data;
+    }
+    {{/dataType}}
+
+    //BEGIN user code write {{{name}}}
+    {{writeUserCode}}
+    //END user code write {{{name}}}
+    printf("write{{dataTypeVariableName}} got called\n");
+
+    UA_{{dataType}}_clear(&{{dataTypeVariableName}}); 
+
+    return UA_STATUSCODE_GOOD;
+}
+
+// {{{displayName}}} NodeId: {{nodeId}}
+static UA_StatusCode set{{{name}}}VariableDataSource(UA_Server *server) {
+    UA_StatusCode retval = UA_STATUSCODE_BADNOTFOUND;
+    if (!UA_NodeId_isNull(& {{{name}}}_NodeId)) {
+        UA_DataSource {{dataTypeVariableName}}DataSource;
+        {{dataTypeVariableName}}DataSource.read = read{{{name}}};
+        {{dataTypeVariableName}}DataSource.write = write{{{name}}};
+        UA_StatusCode retval = UA_Server_setVariableNode_dataSource(server, {{{name}}}_NodeId, {{dataTypeVariableName}}DataSource);
+
+        printf("{{dataTypeVariableName}} added to variable data source with statuscode: %s\n", UA_StatusCode_name(retval));
+    } else {
+        printf("{{dataTypeVariableName}} not found in server\n");
+    }
+    return retval;
+}
+{{/variableNodes}}
+
+{{#methodNodes}}
+// {{{displayName}}} Callback NodeId: {{nodeId}}
+static UA_StatusCode {{{name}}}Callback(UA_Server *server,
+                  const UA_NodeId *sessionId, void *sessionContext,
+                  const UA_NodeId *methodId, void *methodContext,
+                  const UA_NodeId *objectId, void *objectContext,
+                  size_t inputSize, const UA_Variant *input,
+                  size_t outputSize, UA_Variant *output) {
+
+    {{#inputArguments}}
+    {{#argumentDataType}}
+    UA_{{argumentDataType}} {{argumentName}} = *(UA_{{argumentDataType}}*)input[{{argumentIndex}}].data;
+    {{^isEnum}}
+    // INFO Members of UA_{{argumentDataType}}:
+    /*
+    {{#dataTypeFields}}
+    * {{fieldType}} {{fieldName}}
+    {{/dataTypeFields}}
+    */
+    {{/isEnum}}
+    {{#isEnum}}
+    // INFO Enum fields in UA_{{argumentDataType}};
+
+    {{#argumentEnumValues}}
+    * {{.}}
+    {{/argumentEnumValues}}
+    */
+    {{/isEnum}}
+
+    {{/argumentDataType}}
+    {{^argumentDataType}}
+    // NOTE no data type found!
+    {{/argumentDataType}}
+    {{/inputArguments}}
+
+    {{#outputArguments}}
+    UA_{{argumentDataType}} {{argumentName}};
+    UA_init(&{{argumentName}}, &{{typesArrayName}}[{{typesArrayIndexAlias}}]);
+    {{^isEnum}}
+    // INFO Members of UA_{{argumentDataType}}:
+    /*
+    {{#dataTypeFields}}
+    * {{fieldType}} {{fieldName}}
+    {{/dataTypeFields}}
+    */
+    {{/isEnum}}
+    {{#isEnum}}
+    // INFO Enum fields in UA_{{argumentDataType}};
+    /*
+    {{#argumentEnumValues}}
+    * {{.}}
+    {{/argumentEnumValues}}
+    */
+    {{/isEnum}}
+
+    {{/outputArguments}}
+
+    printf("{{{name}}}Callback called!\n");
+
+    //BEGIN user code {{{name}}}
+    {{userCode}}
+    //END user code {{{name}}}
+
+    {{#outputArguments}}
+    UA_Variant_setScalarCopy(&output[{{argumentIndex}}], &{{argumentName}}, &{{typesArrayName}}[{{typesArrayIndexAlias}}]);
+    {{/outputArguments}}
+
+    return UA_STATUSCODE_GOOD;
+}
+{{/methodNodes}}
+{{#methodCount}}
+static UA_StatusCode resolveMethodCallback(UA_Server *server,
+                    const UA_NodeId *sessionId, void *sessionContext,
+                    const UA_NodeId *methodId, void *methodContext,
+                    const UA_NodeId *objectId, void *objectContext,
+                    size_t inputSize, const UA_Variant *input,
+                    size_t outputSize, UA_Variant *output) {
+
+UA_StatusCode retVal = UA_STATUSCODE_GOOD;
+{{#methodNodes}}
+    if(UA_NodeId_equal(&{{parentNodeId}}, objectId)) {
+        retVal = {{{name}}}Callback(server, sessionId, sessionContext, methodId, methodContext, objectId, objectContext, inputSize, input, outputSize, output);
+    }
+{{/methodNodes}}
+    return retVal;
+}
+
+static UA_StatusCode setCallbackForMethods(UA_Server *server) {
+    
+    UA_StatusCode retVal = UA_STATUSCODE_GOOD;
+{{#methodNodes}}
+    retVal |=  UA_Server_setMethodNodeCallback(server, {{{name}}}_NodeId, resolveMethodCallback);
+{{/methodNodes}}
+    return retVal;
+}
+{{/methodCount}}
+
+static void initNamespaces(UA_Server *server) {
+    {{#nodeSets}}
+    namespace_{{name}}_generated(server);
+    {{/nodeSets}}
+    {{#nameSpaces}}
+    ns[{{index}}] = UA_Server_addNamespace(server, "{{{uri}}}");
+    {{/nameSpaces}}
+}
+
+static void initNodeIds(void) {
+    {{#methodNodes}}
+    {{{name}}}_NodeId = UA_NODEID_NUMERIC(ns[{{namespaceIndex}}], {{identifier}});
+    {{/methodNodes}}
+    {{#variableNodes}}
+    nodeArray[{{nodeIndex}}] = UA_NODEID_NUMERIC(ns[{{namespaceIndex}}], {{identifier}});
+    {{/variableNodes}}
+    {{#objectNodes}}
+    nodeArray[{{nodeIndex}}] = UA_NODEID_NUMERIC(ns[{{namespaceIndex}}], {{identifier}});
+    {{/objectNodes}}
+    {{#methodNodes}}
+    nodeArray[{{nodeIndex}}] = UA_NODEID_NUMERIC(ns[{{namespaceIndex}}], {{identifier}});
+    {{/methodNodes}}
+}
+
+static void setChildNodeId(UA_Server *server, UA_NodeId parentNodeId, UA_QualifiedName targetName,
+                           UA_NodeId *childNode, char *displayName, char *description) {
+    UA_QualifiedName browsePath[1];
+    browsePath[0] = targetName;
+    *childNode = getNodeIdFromBrowsePath(server, parentNodeId, browsePath, 1);
+
+     if (!UA_NodeId_isNull(childNode)) {
+        UA_LocalizedText descriptionText = UA_LOCALIZEDTEXT("en-US", description);
+
+        UA_StatusCode status = UA_Server_writeDescription(server, *childNode, descriptionText);
+        if (status != UA_STATUSCODE_GOOD) {
+            printf("Failed to set description for node %s\n", targetName.name.data);
+        }
+
+        UA_LocalizedText displayNameText = UA_LOCALIZEDTEXT("en-US", displayName);
+        status = UA_Server_writeDisplayName(server, *childNode, displayNameText);
+        if (status != UA_STATUSCODE_GOOD) {
+            printf("Failed to set display name for node %s\n", targetName.name.data);
+        }
+    }
+}
+
+static void setChildNodeIds(UA_Server *server) {
+    {{#objectNodes}}
+    setChildNodeId(server, {{{parentNodeId}}}, UA_QUALIFIEDNAME(ns[{{namespaceIndex}}], "{{{baseBrowseName}}}"), &{{{name}}}_NodeId, "{{displayName}}", "{{description}}");
+    {{/objectNodes}}
+    {{#variableNodes}}
+    setChildNodeId(server, {{{parentNodeId}}}, UA_QUALIFIEDNAME(ns[{{namespaceIndex}}], "{{{baseBrowseName}}}"), &{{{name}}}_NodeId, "{{displayName}}", "{{description}}");
+    {{/variableNodes}}
+}
+
+static void setDataSources(UA_Server *server) {
+    {{#variableNodes}}
+    set{{{name}}}VariableDataSource(server);
+    {{/variableNodes}}
+}
+
+int main(void) {
+    UA_Server *server = UA_Server_new();
+    UA_ServerConfig_setDefault(UA_Server_getConfig(server));
+
+    initNamespaces(server);
+    initNodeIds();
+    
+    {{#rootNodes}}
+    add{{{browseName}}}(server);
+    {{/rootNodes}}
+
+    setChildNodeIds(server);
+    {{#methodCount}}
+    setCallbackForMethods(server);
+    {{/methodCount}}
+    setDataSources(server);
+
+    signal(SIGINT, signalHandler);
+
+    printf("Starting Server!\n");
+    UA_StatusCode retval = UA_Server_run(server, &running);
+
+    if (retval != UA_STATUSCODE_GOOD) {
+        printf("Failed to start the server. Error code: %s\n", UA_StatusCode_name(retval));
+        return -1;
+    }
+
+    UA_Server_delete(server);
+
+    return 0;
+}
