@@ -59,6 +59,10 @@ Rectangle {
                     select(-1)
                     core.removeRootNodeFromSelection(index)
                 }
+
+                palette.windowText: "black"
+                palette.light: "white"
+                palette.midlight: "#8A8A8A"
             }
         }
     }
@@ -68,7 +72,7 @@ Rectangle {
 
         anchors.left: parent.left
         anchors.verticalCenter: treeDelegate.verticalCenter
-        
+
         width: Utils.defaultFontSize
         height: Utils.defaultFontSize
 
@@ -94,11 +98,11 @@ Rectangle {
         id: label
 
         anchors.verticalCenter: treeDelegate.verticalCenter
-        
+
         width: treeDelegate.width - treeDelegate.padding - x
         x: treeDelegate.padding + icon.width
         clip: true
-        
+
         color: palette.text
         text: model.browseName + " -> " + model.nodeId
         elide: Text.ElideRight

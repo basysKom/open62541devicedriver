@@ -19,10 +19,13 @@ TreeViewDelegate {
     property int headerCells: 1
     property int cellWidth: width / headerCells
 
+    leftMargin: isWasm ? Utils.normalSpacing : 0
+
     visible: implicitHeight > 1
 
     background: Rectangle {
         radius: 5
+        height: isWasm ? parent.implicitHeight + 4 : height
         color: treeDelegate.selected
                ? treeDelegate.palette.highlight : treeDelegate.hovered ? Qt.lighter(palette.window) : "transparent"
     }
@@ -44,7 +47,8 @@ TreeViewDelegate {
 
     contentItem: RowLayout  {
         anchors.left: indicator.right
-        spacing: 0
+        anchors.verticalCenter: treeDelegate.verticalCenter
+        spacing: isWasm ? 5 : 0
 
         Item {
             id: selectItem
@@ -58,6 +62,8 @@ TreeViewDelegate {
                 anchors.verticalCenter: selectItem.verticalCenter
 
                 visible: treeDelegate.showCheckBox
+
+                opacity: enabled ? 1 : 0.5
 
                 checked: treeDelegate.model.isSelected
                 enabled: !model.isOptional ? false : model.isParentSelected ? true : false

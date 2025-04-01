@@ -7,7 +7,9 @@
 #include "Util/Utils.h"
 #include "devicedrivercore.h"
 
+#include <QColor>
 #include <QGuiApplication>
+#include <QPalette>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 
@@ -76,7 +78,19 @@ int main(int argc, char* argv[])
     QQmlApplicationEngine engine;
 
     DeviceDriverCore core;
-    // TODO let the user set those paths. Do not hardcode them depending on the build path
+
+// TODO let the user set those paths. Do not hardcode them depending on the build path
+#ifdef WASM_BUILD
+    bool isWasm = true;
+    core.setNodeSetPath(
+        QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("/data")));
+    core.setMustacheTemplatePath(QDir(QCoreApplication::applicationDirPath())
+                                     .filePath(QStringLiteral("/templates/open62541.mustache")));
+    core.setCmakeMustacheTemplatePath(
+        QDir(QCoreApplication::applicationDirPath())
+            .filePath(QStringLiteral("/templates/CMakeLists.mustache")));
+#else
+    bool isWasm = false;
     core.setNodeSetPath(
         QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("../../UA-Nodeset/")));
     core.setMustacheTemplatePath(
@@ -85,18 +99,24 @@ int main(int argc, char* argv[])
     core.setCmakeMustacheTemplatePath(
         QDir(QCoreApplication::applicationDirPath())
             .filePath(QStringLiteral("../../templates/CMakeLists.mustache")));
-    core.setOutputFilePath(QDir(QCoreApplication::applicationDirPath())
-                               .filePath(QStringLiteral("../../templates/output.c")));
-    core.setJsonOutputFilePath(QDir(QCoreApplication::applicationDirPath())
-                                   .filePath(QStringLiteral("../../templates/output.json")));
-    core.setCmakeOutputFilePath(QDir(QCoreApplication::applicationDirPath())
-                                    .filePath(QStringLiteral("../../templates/CMakeLists.txt")));
+#endif
+
+    core.setOutputFilePath(
+        QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("../../templates/")));
+    core.setJsonOutputFilePath(
+        QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("../../templates/")));
+    core.setCmakeOutputFilePath(
+        QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("../../templates/")));
 
     engine.rootContext()->setContextProperty(QStringLiteral("core"), &core);
+    engine.rootContext()->setContextProperty(QStringLiteral("isWasm"), isWasm);
+
     qmlRegisterSingletonType<Utils>("Utils", 1, 0, "Utils", &Utils::create);
     qmlRegisterType<TreeItem>("TreeItem", 1, 0, "TreeItem");
 
+#ifndef WASM_BUILD
     qInstallMessageHandler(messageHandler);
+#endif
 
     QObject::connect(
         &engine,

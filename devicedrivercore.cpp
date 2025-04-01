@@ -11,7 +11,6 @@
 #include "Util/Utils.h"
 #include <fstream>
 #include <iostream>
-#include <mstch/mstch.hpp>
 #include <sstream>
 #include <string>
 #include <QFile>
@@ -120,7 +119,8 @@ void DeviceDriverCore::removeRootNodeFromSelection(const int index)
     m_selectionModel->removeRootNodeFromSelection(index);
 }
 
-void DeviceDriverCore::getVariableAsMustacheArray(TreeItem* item, mstch::map& nodeMap)
+void DeviceDriverCore::getVariableAsMustacheArray(
+    TreeItem* item, std::unordered_map<std::string, mustache::data>& nodeMap, QJsonObject& jsonObj)
 {
     QString nameStr = Utils::instance()->sanitizeName(item->nodeVariableName());
 
@@ -138,312 +138,566 @@ void DeviceDriverCore::getVariableAsMustacheArray(TreeItem* item, mstch::map& no
                 ->removeNamespaceIndexFromName(item->dataType().definitionName())
                 .toUpper();
 
-    nodeMap["dataType"] = mstch::node(
-        Utils::instance()
-            ->removeNamespaceIndexFromName(item->dataType().definitionName())
-            .toStdString());
-    nodeMap["dataTypeVariableName"] = mstch::node(
-        Utils::instance()
-            ->lowerFirstChar(Utils::instance()->removeNamespaceIndexFromName(item->displayName()))
-            .toStdString());
+    std::string dataTypeValue = Utils::instance()
+                                    ->removeNamespaceIndexFromName(item->dataType().definitionName())
+                                    .toStdString();
+    nodeMap["dataType"] = dataTypeValue.empty() ? mustache::data(false) : dataTypeValue;
+    jsonObj[QStringLiteral("dataType")] = QString::fromStdString(dataTypeValue);
 
-    nodeMap["typesArrayName"] = mstch::node(typesArrayName.toStdString());
-    nodeMap["typesArrayIndexAlias"] = mstch::node(typesArrayIndexAlias.toStdString());
-    nodeMap["readUserCode"] = mstch::node(getUserCodeSegment(
-                                              m_outputFilePath,
-                                              QStringLiteral("//BEGIN user code read ") + nameStr,
-                                              QStringLiteral("//END user code read ") + nameStr)
-                                              .toStdString());
-    nodeMap["writeUserCode"] = mstch::node(getUserCodeSegment(
-                                               m_outputFilePath,
-                                               QStringLiteral("//BEGIN user code write ") + nameStr,
-                                               QStringLiteral("//END user code write ") + nameStr)
-                                               .toStdString());
+    std::string dataTypeVarNameValue
+        = Utils::instance()
+              ->lowerFirstChar(Utils::instance()->removeNamespaceIndexFromName(item->displayName()))
+              .toStdString();
+    nodeMap["dataTypeVariableName"] = dataTypeVarNameValue.empty() ? mustache::data(false)
+                                                                   : dataTypeVarNameValue;
+    jsonObj[QStringLiteral("dataTypeVariableName")] = QString::fromStdString(dataTypeVarNameValue);
 
-    mstch::array definitionFieldsArray;
-    bool hasValue;
+    std::string typesArrayNameValue = typesArrayName.toStdString();
+    nodeMap["typesArrayName"] = typesArrayNameValue.empty() ? mustache::data(false)
+                                                            : typesArrayNameValue;
+    jsonObj[QStringLiteral("typesArrayName")] = QString::fromStdString(typesArrayNameValue);
+
+    std::string typesArrayIndexAliasValue = typesArrayIndexAlias.toStdString();
+    nodeMap["typesArrayIndexAlias"] = typesArrayIndexAliasValue.empty() ? mustache::data(false)
+                                                                        : typesArrayIndexAliasValue;
+    jsonObj[QStringLiteral("typesArrayIndexAlias")] = QString::fromStdString(
+        typesArrayIndexAliasValue);
+
+    std::string readUserCodeValue = getUserCodeSegment(
+                                        m_outputFilePath,
+                                        QStringLiteral("//BEGIN user code read ") + nameStr,
+                                        QStringLiteral("//END user code read ") + nameStr)
+                                        .toStdString();
+    nodeMap["readUserCode"] = readUserCodeValue.empty() ? mustache::data(false) : readUserCodeValue;
+    jsonObj[QStringLiteral("readUserCode")] = QString::fromStdString(readUserCodeValue);
+
+    std::string writeUserCodeValue = getUserCodeSegment(
+                                         m_outputFilePath,
+                                         QStringLiteral("//BEGIN user code write ") + nameStr,
+                                         QStringLiteral("//END user code write ") + nameStr)
+                                         .toStdString();
+    nodeMap["writeUserCode"] = writeUserCodeValue.empty() ? mustache::data(false)
+                                                          : writeUserCodeValue;
+    jsonObj[QStringLiteral("writeUserCode")] = QString::fromStdString(writeUserCodeValue);
+
+    std::vector<mustache::data> definitionFieldsArray;
+    QJsonArray jsonDefinitionFieldsArray;
+    bool hasValue = false;
 
     QVariantList fields = item->definitionFields();
     for (int i = 0; i < fields.size(); ++i) {
-        mstch::map definitionFields;
-        definitionFields["fieldName"] = mstch::node(
-            Utils::instance()
-                ->lowerFirstChar(Utils::instance()->removeNamespaceIndexFromName(
-                    fields.at(i).toMap()[QStringLiteral("key")].toString()))
-                .toStdString());
-        definitionFields["fieldType"] = mstch::node(
-            fields.at(i).toMap()[QStringLiteral("value")].toString().toStdString());
-        definitionFields["fieldValue"] = mstch::node(
-            item->getValue(fields.at(i).toMap()[QStringLiteral("key")].toString())
-                .toString()
-                .toStdString());
+        std::unordered_map<std::string, mustache::data> definitionFields;
+        QJsonObject jsonDefinitionFields;
+
+        std::string fieldNameValue
+            = Utils::instance()
+                  ->lowerFirstChar(Utils::instance()->removeNamespaceIndexFromName(
+                      fields.at(i).toMap()[QStringLiteral("key")].toString()))
+                  .toStdString();
+        definitionFields["fieldName"] = fieldNameValue.empty() ? mustache::data(false)
+                                                               : fieldNameValue;
+        jsonDefinitionFields[QStringLiteral("fieldName")] = QString::fromStdString(fieldNameValue);
+
+        std::string fieldTypeValue
+            = fields.at(i).toMap()[QStringLiteral("value")].toString().toStdString();
+        definitionFields["fieldType"] = fieldTypeValue.empty() ? mustache::data(false)
+                                                               : fieldTypeValue;
+        jsonDefinitionFields[QStringLiteral("fieldType")] = QString::fromStdString(fieldTypeValue);
+
+        std::string fieldValueVal = item->getValue(
+                                            fields.at(i).toMap()[QStringLiteral("key")].toString())
+                                        .toString()
+                                        .toStdString();
+        definitionFields["fieldValue"] = fieldValueVal.empty() ? mustache::data(false)
+                                                               : fieldValueVal;
+        jsonDefinitionFields[QStringLiteral("fieldValue")] = QString::fromStdString(fieldValueVal);
+
         QString dataType = fields.at(i).toMap()[QStringLiteral("value")].toString();
-        definitionFields["isString"] = mstch::node(
-            dataType == QStringLiteral("String") || dataType == QStringLiteral("Locale"));
+        bool isString
+            = (dataType == QStringLiteral("String") || dataType == QStringLiteral("Locale"));
+        definitionFields["isString"] = isString;
+        jsonDefinitionFields[QStringLiteral("isString")] = isString;
+
         hasValue = item->getValue(fields.at(i).toMap()[QStringLiteral("key")].toString()).isValid();
 
-        definitionFieldsArray.push_back(definitionFields);
+        definitionFieldsArray.emplace_back(definitionFields);
+        jsonDefinitionFieldsArray.append(jsonDefinitionFields);
     }
-    nodeMap["singleFieldValueFlag"] = mstch::node(fields.size() == 1);
-    nodeMap["fieldsHaveValuesFlag"] = mstch::node(hasValue);
-    nodeMap["definitionFields"] = mstch::node(definitionFieldsArray);
+
+    nodeMap["singleFieldValueFlag"] = (fields.size() == 1);
+    jsonObj[QStringLiteral("singleFieldValueFlag")] = (fields.size() == 1);
+
+    nodeMap["fieldsHaveValuesFlag"] = hasValue;
+    jsonObj[QStringLiteral("fieldsHaveValuesFlag")] = hasValue;
+
+    nodeMap["definitionFields"] = definitionFieldsArray;
+    jsonObj[QStringLiteral("definitionFields")] = jsonDefinitionFieldsArray;
 }
 
-void DeviceDriverCore::getMethodAsMustacheArray(TreeItem* item, mstch::map& nodeMap)
+void DeviceDriverCore::getMethodAsMustacheArray(
+    TreeItem* item, std::unordered_map<std::string, mustache::data>& nodeMap, QJsonObject& jsonObj)
 {
     std::shared_ptr<UAMethod> methodNode = std::dynamic_pointer_cast<UAMethod>(item->getNode());
 
-    mstch::array outputArgumentsArray;
-    mstch::array inputArgumentsArray;
+    std::vector<mustache::data> outputArgumentsArray;
+    std::vector<mustache::data> inputArgumentsArray;
+    QJsonArray jsonOutputArgumentsArray;
+    QJsonArray jsonInputArgumentsArray;
 
     std::shared_ptr<UAVariable> var = methodNode->inputArgument();
-    int inputArgSize = var == nullptr ? 0 : (int) var->arguments().size();
+    int inputArgSize = var ? static_cast<int>(var->arguments().size()) : 0;
 
-    nodeMap["inputArgumentArrayDimensions"] = inputArgSize;
+    nodeMap["inputArgumentArrayDimensions"] = QString::number(inputArgSize).toStdString();
+    jsonObj[QStringLiteral("inputArgumentArrayDimensions")] = inputArgSize;
+
     for (int i = 0; i < inputArgSize; ++i) {
-        mstch::map inputArgs;
-        getArgumentsAsMustacheArray(i, var, inputArgs);
-        inputArgs["argumentIndex"] = mstch::node(i);
-        inputArgumentsArray.push_back(inputArgs);
+        std::unordered_map<std::string, mustache::data> inputArgs;
+        QJsonObject jsonInputArgs;
+
+        getArgumentsAsMustacheArray(i, var, inputArgs, jsonInputArgs);
+        inputArgs["argumentIndex"] = QString::number(i).toStdString();
+        jsonInputArgs[QStringLiteral("argumentIndex")] = i;
+
+        inputArgumentsArray.emplace_back(inputArgs);
+        jsonInputArgumentsArray.append(jsonInputArgs);
     }
 
     var = methodNode->outputArgument();
-    int outputArgSize = var == nullptr ? 0 : (int) var->arguments().size();
+    int outputArgSize = var ? static_cast<int>(var->arguments().size()) : 0;
 
-    nodeMap["outputArgumentArrayDimensions"] = outputArgSize;
+    nodeMap["outputArgumentArrayDimensions"] = QString::number(outputArgSize).toStdString();
+    jsonObj[QStringLiteral("outputArgumentArrayDimensions")] = outputArgSize;
+
     for (int i = 0; i < outputArgSize; ++i) {
-        mstch::map outputArgs;
-        getArgumentsAsMustacheArray(i, var, outputArgs);
-        outputArgs["argumentIndex"] = mstch::node(i);
-        outputArgumentsArray.push_back(outputArgs);
+        std::unordered_map<std::string, mustache::data> outputArgs;
+        QJsonObject jsonOutputArgs;
+
+        getArgumentsAsMustacheArray(i, var, outputArgs, jsonOutputArgs);
+        outputArgs["argumentIndex"] = QString::number(i).toStdString();
+        jsonOutputArgs[QStringLiteral("argumentIndex")] = i;
+
+        outputArgumentsArray.emplace_back(outputArgs);
+        jsonOutputArgumentsArray.append(jsonOutputArgs);
     }
 
-    nodeMap["inputArguments"] = mstch::node(inputArgumentsArray);
-    nodeMap["outputArguments"] = mstch::node(outputArgumentsArray);
+    nodeMap["inputArguments"] = inputArgumentsArray;
+    jsonObj[QStringLiteral("inputArguments")] = jsonInputArgumentsArray;
+
+    nodeMap["outputArguments"] = outputArgumentsArray;
+    jsonObj[QStringLiteral("outputArguments")] = jsonOutputArgumentsArray;
+
     // FIXME use the user input here for variable name
     QString nameStr = Utils::instance()->sanitizeName(item->nodeVariableName());
 
-    nodeMap["userCode"] = mstch::node(getUserCodeSegment(
-                                          m_outputFilePath,
-                                          QStringLiteral("//BEGIN user code ") + nameStr,
-                                          QStringLiteral("//END user code ") + nameStr)
-                                          .toStdString());
+    std::string userCodeValue = getUserCodeSegment(
+                                    m_outputFilePath,
+                                    QStringLiteral("//BEGIN user code ") + nameStr,
+                                    QStringLiteral("//END user code ") + nameStr)
+                                    .toStdString();
+    nodeMap["userCode"] = userCodeValue.empty() ? mustache::data(false) : userCodeValue;
+    jsonObj[QStringLiteral("userCode")] = QString::fromStdString(userCodeValue);
 }
 
 void DeviceDriverCore::getArgumentsAsMustacheArray(
-    int index, std::shared_ptr<UAVariable> var, mstch::map& argMap)
+    int index,
+    std::shared_ptr<UAVariable> var,
+    std::unordered_map<std::string, mustache::data>& argMap,
+    QJsonObject& jsonArgMap)
 {
     Argument arg = var->arguments().at(index);
-    argMap["argumentName"] = mstch::node(Utils::instance()->lowerFirstChar(arg.name).toStdString());
+    std::string argumentNameValue = Utils::instance()->lowerFirstChar(arg.name).toStdString();
+    argMap["argumentName"] = argumentNameValue.empty() ? mustache::data(false) : argumentNameValue;
+    jsonArgMap[QStringLiteral("argumentName")] = QString::fromStdString(argumentNameValue);
 
     int nameSpaceIndex = Utils::instance()->extractNamespaceIndex(arg.dataTypeIdentifier);
     QString namespaceString
         = Utils::instance()->getNamespaceByIndex(var->namespaceString(), nameSpaceIndex);
+
     std::shared_ptr<UADataType> dataType = std::dynamic_pointer_cast<UADataType>(
         findNodeById(namespaceString, arg.dataTypeIdentifier));
-    argMap["argumentDataType"] = mstch::node(
-        Utils::instance()->removeNamespaceIndexFromName(dataType->browseName()).toStdString());
+
+    std::string argumentDataTypeValue
+        = Utils::instance()->removeNamespaceIndexFromName(dataType->browseName()).toStdString();
+    argMap["argumentDataType"] = argumentDataTypeValue.empty() ? mustache::data(false)
+                                                               : argumentDataTypeValue;
+    jsonArgMap[QStringLiteral("argumentDataType")] = QString::fromStdString(argumentDataTypeValue);
 
     QString nsName = Utils::instance()->extractNameFromNamespaceString(dataType->namespaceString());
     QString typesArrayName = QStringLiteral("UA_TYPES")
-                             + (nsName.size() > 0 ? QStringLiteral("_") + nsName.toUpper()
-                                                  : QStringLiteral(""));
+                             + (nsName.isEmpty() ? QStringLiteral("")
+                                                 : QStringLiteral("_") + nsName.toUpper());
     QString typesArrayIndexAlias
         = QStringLiteral("UA_TYPES")
-          + (nsName.size() > 0 ? QStringLiteral("_") + nsName.toUpper() + QStringLiteral("_")
-                               : QStringLiteral("_"))
+          + (nsName.isEmpty() ? QStringLiteral("_")
+                              : QStringLiteral("_") + nsName.toUpper() + QStringLiteral("_"))
           + Utils::instance()->removeNamespaceIndexFromName(dataType->browseName()).toUpper();
-    argMap["typesArrayName"] = mstch::node(typesArrayName.toStdString());
-    argMap["typesArrayIndexAlias"] = mstch::node(typesArrayIndexAlias.toStdString());
-    argMap["isEnum"] = mstch::node(dataType->isEnum());
 
-    if (dataType->isEnum()) {
-        mstch::array enumValues;
-        for (const auto [key, value] : dataType->definitionFields().asKeyValueRange()) {
-            enumValues.push_back(mstch::node((key + QStringLiteral(" = ") + value).toStdString()));
+    std::string typesArrayNameValue = typesArrayName.toStdString();
+    argMap["typesArrayName"] = typesArrayNameValue.empty() ? mustache::data(false)
+                                                           : typesArrayNameValue;
+    jsonArgMap[QStringLiteral("typesArrayName")] = QString::fromStdString(typesArrayNameValue);
+
+    std::string typesArrayIndexAliasValue = typesArrayIndexAlias.toStdString();
+    argMap["typesArrayIndexAlias"] = typesArrayIndexAliasValue.empty() ? mustache::data(false)
+                                                                       : typesArrayIndexAliasValue;
+    jsonArgMap[QStringLiteral("typesArrayIndexAlias")] = QString::fromStdString(
+        typesArrayIndexAliasValue);
+
+    bool isEnum = dataType->isEnum();
+    argMap["isEnum"] = isEnum;
+    jsonArgMap[QStringLiteral("isEnum")] = isEnum;
+
+    if (isEnum) {
+        std::vector<mustache::data> enumValues;
+        QJsonArray jsonEnumValues;
+
+        for (const auto& [key, value] : dataType->definitionFields().asKeyValueRange()) {
+            std::string enumValue = (key + QStringLiteral(" = ") + value).toStdString();
+            enumValues.emplace_back(enumValue.empty() ? mustache::data(false) : enumValue);
+            jsonEnumValues.append(QString::fromStdString(enumValue));
         }
+
         argMap["argumentEnumValues"] = enumValues;
+        jsonArgMap[QStringLiteral("argumentEnumValues")] = jsonEnumValues;
     } else {
-        mstch::array dataTypeFields;
-        for (const auto [key, value] : dataType->definitionFields().asKeyValueRange()) {
-            mstch::map field;
-            field["fieldName"] = mstch::node(Utils::instance()->lowerFirstChar(key).toStdString());
-            // TODO those are just the field names from the NodeSet2.xml.
-            // Maybe use a "findDataTypeByName" function to get the correct field type. (E.g. Duration is just a double)
-            field["fieldType"] = mstch::node(value.toStdString());
-            dataTypeFields.push_back(field);
+        std::vector<mustache::data> dataTypeFields;
+        QJsonArray jsonDataTypeFields;
+
+        for (const auto& [key, value] : dataType->definitionFields().asKeyValueRange()) {
+            std::unordered_map<std::string, mustache::data> field;
+            QJsonObject jsonField;
+
+            std::string fieldNameValue = Utils::instance()->lowerFirstChar(key).toStdString();
+            field["fieldName"] = fieldNameValue.empty() ? mustache::data(false) : fieldNameValue;
+            jsonField[QStringLiteral("fieldName")] = QString::fromStdString(fieldNameValue);
+
+            std::string fieldTypeValue = value.toStdString();
+            field["fieldType"] = fieldTypeValue.empty() ? mustache::data(false) : fieldTypeValue;
+            jsonField[QStringLiteral("fieldType")] = QString::fromStdString(fieldTypeValue);
+
+            dataTypeFields.emplace_back(field);
+            jsonDataTypeFields.append(jsonField);
         }
+
         argMap["dataTypeFields"] = dataTypeFields;
+        jsonArgMap[QStringLiteral("dataTypeFields")] = jsonDataTypeFields;
     }
 }
 
-mstch::map DeviceDriverCore::createNodeMap(
-    int index, TreeItem* item, const QMap<int, QString>& namespaceMap)
+std::unordered_map<std::string, mustache::data> DeviceDriverCore::createNodeMap(
+    int index, TreeItem* item, const QMap<int, QString>& namespaceMap, QJsonObject& jsonNodeMap)
 {
-    mstch::map nodeMap;
+    std::unordered_map<std::string, mustache::data> nodeMap;
 
     QString nameStr = Utils::instance()->sanitizeName(item->nodeVariableName());
-    nodeMap["nodeIndex"] = mstch::node(index);
-    nodeMap["name"] = mstch::node(nameStr.toStdString());
-    nodeMap["nodeId"] = mstch::node(item->nodeId().toStdString());
-    nodeMap["identifier"] = mstch::node(
-        Utils::instance()->extractIdentifier(item->nodeId()).toStdString());
-    nodeMap["namespaceIndex"] = mstch::node(namespaceMap.key(item->namespaceString()));
-    nodeMap["browseName"] = mstch::node(
-        Utils::instance()->removeNamespaceIndexFromName(item->browseName()).toStdString());
-    nodeMap["baseBrowseName"] = mstch::node(
-        Utils::instance()->removeNamespaceIndexFromName(item->baseBrowseName()).toStdString());
-    nodeMap["displayName"] = mstch::node(item->displayName().toStdString());
-    nodeMap["description"] = mstch::node(item->description().toStdString());
+
+    std::string nodeIndexValue = std::to_string(index);
+    nodeMap["nodeIndex"] = nodeIndexValue.empty() ? mustache::data(false) : nodeIndexValue;
+    jsonNodeMap[QStringLiteral("nodeIndex")] = QString::fromStdString(nodeIndexValue);
+
+    std::string nameValue = nameStr.toStdString();
+    nodeMap["name"] = nameValue.empty() ? mustache::data(false) : nameValue;
+    jsonNodeMap[QStringLiteral("name")] = QString::fromStdString(nameValue);
+
+    std::string nodeIdValue = item->nodeId().toStdString();
+    nodeMap["nodeId"] = nodeIdValue.empty() ? mustache::data(false) : nodeIdValue;
+    jsonNodeMap[QStringLiteral("nodeId")] = QString::fromStdString(nodeIdValue);
+
+    std::string identifierValue = Utils::instance()->extractIdentifier(item->nodeId()).toStdString();
+    nodeMap["identifier"] = identifierValue.empty() ? mustache::data(false) : identifierValue;
+    jsonNodeMap[QStringLiteral("identifier")] = QString::fromStdString(identifierValue);
+
+    std::string namespaceIndexValue = std::to_string(namespaceMap.key(item->namespaceString()));
+    nodeMap["namespaceIndex"] = namespaceIndexValue.empty() ? mustache::data(false)
+                                                            : namespaceIndexValue;
+    jsonNodeMap[QStringLiteral("namespaceIndex")] = QString::fromStdString(namespaceIndexValue);
+
+    std::string browseNameValue
+        = Utils::instance()->removeNamespaceIndexFromName(item->browseName()).toStdString();
+    nodeMap["browseName"] = browseNameValue.empty() ? mustache::data(false) : browseNameValue;
+    jsonNodeMap[QStringLiteral("browseName")] = QString::fromStdString(browseNameValue);
+
+    std::string baseBrowseNameValue
+        = Utils::instance()->removeNamespaceIndexFromName(item->baseBrowseName()).toStdString();
+    nodeMap["baseBrowseName"] = baseBrowseNameValue.empty() ? mustache::data(false)
+                                                            : baseBrowseNameValue;
+    jsonNodeMap[QStringLiteral("baseBrowseName")] = QString::fromStdString(baseBrowseNameValue);
+
+    std::string displayNameValue = item->displayName().toStdString();
+    nodeMap["displayName"] = displayNameValue.empty() ? mustache::data(false) : displayNameValue;
+    jsonNodeMap[QStringLiteral("displayName")] = QString::fromStdString(displayNameValue);
+
+    std::string descriptionValue = item->description().toStdString();
+    nodeMap["description"] = descriptionValue.empty() ? mustache::data(false) : descriptionValue;
+    jsonNodeMap[QStringLiteral("description")] = QString::fromStdString(descriptionValue);
 
     return nodeMap;
 }
 
-mstch::map DeviceDriverCore::getMustacheData()
+std::pair<std::unordered_map<std::string, mustache::data>, QJsonDocument>
+DeviceDriverCore::getMustacheData()
 {
-    // TODO use defines for the nodeMap keys and the hardcoded strings?
-    mstch::map data;
-    mstch::array nameSpacesArray;
-    mstch::array nodeSetsArray;
-    mstch::array rootNodesArray;
-    mstch::array objectNodesArray;
-    mstch::array variableNodesArray;
-    mstch::array methodNodesArray;
+    std::unordered_map<std::string, mustache::data> data;
+    QJsonObject jsonData;
 
-    // map for namespace mapping to match the correct namespace index.
+    std::vector<mustache::data> nameSpacesArray;
+    std::vector<mustache::data> nodeSetsArray;
+    std::vector<mustache::data> rootNodesArray;
+    std::vector<mustache::data> objectNodesArray;
+    std::vector<mustache::data> variableNodesArray;
+    std::vector<mustache::data> methodNodesArray;
+
+    QJsonArray jsonNameSpacesArray;
+    QJsonArray jsonNodeSetsArray;
+    QJsonArray jsonRootNodesArray;
+    QJsonArray jsonObjectNodesArray;
+    QJsonArray jsonVariableNodesArray;
+    QJsonArray jsonMethodNodesArray;
+
+    // Namespace mapping
     QMap<int, QString> namespaceMap;
 
-    // Some top level infos. The number of namespaces and the nodesets.
-    data["nsCount"] = mstch::node{(int) m_nodeSets.size()};
+    std::string nsCountValue = std::to_string(m_nodeSets.size());
+    data["nsCount"] = nsCountValue.empty() ? mustache::data(false) : nsCountValue;
+    jsonData[QStringLiteral("nsCount")] = QString::fromStdString(nsCountValue);
+
     int i = 0;
     for (auto it = m_nodeSets.begin(); it != m_nodeSets.end(); ++it) {
         std::shared_ptr<UANodeSet> nodeSet = it.value();
-        mstch::map ns;
-        ns["uri"] = mstch::node(nodeSet->getNameSpaceUri().toStdString());
+        std::unordered_map<std::string, mustache::data> ns;
+        QJsonObject jsonNs;
+
+        std::string uriValue = nodeSet->getNameSpaceUri().toStdString();
+        ns["uri"] = uriValue.empty() ? mustache::data(false) : uriValue;
+        jsonNs[QStringLiteral("uri")] = QString::fromStdString(uriValue);
+
         qDebug() << "Included Namespace: " << nodeSet->getNameSpaceUri();
-        ns["index"] = mstch::node(i);
+
+        std::string indexValue = std::to_string(i);
+        ns["index"] = indexValue.empty() ? mustache::data(false) : indexValue;
+        jsonNs[QStringLiteral("index")] = QString::fromStdString(indexValue);
+
         namespaceMap.insert(i, nodeSet->getNameSpaceUri());
-        nameSpacesArray.push_back(ns);
+        nameSpacesArray.emplace_back(ns);
+        jsonNameSpacesArray.append(jsonNs);
         ++i;
 
         QString nodeSetName = nodeSet->getNodeSetName();
-        if (nodeSetName != QStringLiteral("")) {
-            mstch::map nodeSetMap;
-            nodeSetMap["name"] = mstch::node(nodeSetName.toStdString());
-            nodeSetMap["hasCustomTypes"] = mstch::node(nodeSet->getHasCustomTypes());
-            // insert nodesets at the beginning because we need the reverse order for the nodeset compiler
-            nodeSetsArray.insert(nodeSetsArray.cbegin(), nodeSetMap);
+        if (!nodeSetName.isEmpty()) {
+            std::unordered_map<std::string, mustache::data> nodeSetMap;
+            QJsonObject jsonNodeSetMap;
+
+            std::string nameValue = nodeSetName.toStdString();
+            nodeSetMap["name"] = nameValue.empty() ? mustache::data(false) : nameValue;
+            jsonNodeSetMap[QStringLiteral("name")] = QString::fromStdString(nameValue);
+
+            std::string hasCustomTypesValue = nodeSet->getHasCustomTypes() ? "true" : "false";
+            nodeSetMap["hasCustomTypes"] = hasCustomTypesValue.empty() ? mustache::data(false)
+                                                                       : hasCustomTypesValue;
+            jsonNodeSetMap[QStringLiteral("hasCustomTypes")] = nodeSet->getHasCustomTypes();
+
+            nodeSetsArray.insert(nodeSetsArray.begin(), nodeSetMap); // Reverse order
+            jsonNodeSetsArray.prepend(jsonNodeSetMap);
         }
     }
-    data["nameSpaces"] = mstch::node(nameSpacesArray);
-    data["nodeSets"] = mstch::node(nodeSetsArray);
 
-    // get all elements in the selection model
+    data["nameSpaces"] = nameSpacesArray;
+    jsonData[QStringLiteral("nameSpaces")] = jsonNameSpacesArray;
+
+    data["nodeSets"] = nodeSetsArray;
+    jsonData[QStringLiteral("nodeSets")] = jsonNodeSetsArray;
+
+    // Get selected nodes
     QList<TreeItem*> allNodes = getSelectedItems();
-    data["nodeCount"] = mstch::node{(int) allNodes.size()};
+    std::string nodeCountValue = std::to_string(allNodes.size());
+    data["nodeCount"] = nodeCountValue.empty() ? mustache::data(false) : nodeCountValue;
+    jsonData[QStringLiteral("nodeCount")] = QString::fromStdString(nodeCountValue);
+
     qDebug() << allNodes.size() << " Nodes selected.";
-    // Loop over all the selected nodes, create a map for each node and add it to the corresponding array
+
     for (int i = 0; i < allNodes.size(); ++i) {
         TreeItem* item = allNodes.at(i);
-        mstch::map nodeMap = createNodeMap(i, item, namespaceMap);
+        QJsonObject jsonNodeMap;
+        std::unordered_map<std::string, mustache::data> nodeMap
+            = createNodeMap(i, item, namespaceMap, jsonNodeMap);
 
-        // TODO the root node will be placed in the UA_NS0ID_OBJECTSFOLDER with the reference UA_NS0ID_ORGANIZES for now.
         if (item->isRootNode()) {
-            nodeMap["parentNodeId"] = mstch::node(
-                QStringLiteral("UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER)").toStdString());
-            nodeMap["referenceTypeNodeId"] = mstch::node(
-                QStringLiteral("UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES)").toStdString());
+            std::string parentNodeIdValue = "UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER)";
+            nodeMap["parentNodeId"] = parentNodeIdValue.empty() ? mustache::data(false)
+                                                                : parentNodeIdValue;
+            jsonNodeMap[QStringLiteral("parentNodeId")] = QString::fromStdString(parentNodeIdValue);
 
-            rootNodesArray.push_back(nodeMap);
+            std::string referenceTypeNodeIdValue = "UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES)";
+            nodeMap["referenceTypeNodeId"] = referenceTypeNodeIdValue.empty()
+                                                 ? mustache::data(false)
+                                                 : referenceTypeNodeIdValue;
+            jsonNodeMap[QStringLiteral("referenceTypeNodeId")] = QString::fromStdString(
+                referenceTypeNodeIdValue);
+
+            rootNodesArray.emplace_back(nodeMap);
+            jsonRootNodesArray.append(jsonNodeMap);
         } else {
             std::string parentNodeIdStr = Utils::instance()
                                               ->sanitizeName(
                                                   item->parentNode().lock()->nodeVariableName()
                                                   + QStringLiteral("_NodeId"))
                                               .toStdString();
-            nodeMap["parentNodeId"] = mstch::node(parentNodeIdStr);
-            // TODO this assumes that all the ref type nodeids are in ns=0
-            nodeMap["referenceTypeNodeId"] = mstch::node(
-                (QStringLiteral("UA_NODEID_NUMERIC(0, ")
-                 + Utils::instance()->extractIdentifier(parentReferenceNodeId(item->getNode()))
-                 + QStringLiteral(")"))
-                    .toStdString());
+            nodeMap["parentNodeId"] = parentNodeIdStr.empty() ? mustache::data(false)
+                                                              : parentNodeIdStr;
+            jsonNodeMap[QStringLiteral("parentNodeId")] = QString::fromStdString(parentNodeIdStr);
+
+            std::string referenceTypeNodeIdValue = "UA_NODEID_NUMERIC(0, "
+                                                   + Utils::instance()
+                                                         ->extractIdentifier(
+                                                             parentReferenceNodeId(item->getNode()))
+                                                         .toStdString()
+                                                   + ")";
+            nodeMap["referenceTypeNodeId"] = referenceTypeNodeIdValue.empty()
+                                                 ? mustache::data(false)
+                                                 : referenceTypeNodeIdValue;
+            jsonNodeMap[QStringLiteral("referenceTypeNodeId")] = QString::fromStdString(
+                referenceTypeNodeIdValue);
         }
 
-        // add specific values for the different node types
         if (item->typeName() == XmlTags::UAObject) {
-            objectNodesArray.push_back(nodeMap);
+            objectNodesArray.emplace_back(nodeMap);
+            jsonObjectNodesArray.append(jsonNodeMap);
         } else if (item->typeName() == XmlTags::UAVariable) {
-            getVariableAsMustacheArray(item, nodeMap);
-            variableNodesArray.push_back(nodeMap);
+            getVariableAsMustacheArray(item, nodeMap, jsonNodeMap);
+            variableNodesArray.emplace_back(nodeMap);
+            jsonVariableNodesArray.append(jsonNodeMap);
         } else if (item->typeName() == XmlTags::UAMethod) {
-            getMethodAsMustacheArray(item, nodeMap);
-            methodNodesArray.push_back(nodeMap);
+            getMethodAsMustacheArray(item, nodeMap, jsonNodeMap);
+            methodNodesArray.emplace_back(nodeMap);
+            jsonMethodNodesArray.append(jsonNodeMap);
         }
     }
 
-    if (methodNodesArray.size() > 0) {
-        data["methodCount"] = mstch::node{(int) methodNodesArray.size()};
+    if (!methodNodesArray.empty()) {
+        std::string methodCountValue = std::to_string(methodNodesArray.size());
+        data["methodCount"] = methodCountValue.empty() ? mustache::data(false) : methodCountValue;
+        jsonData[QStringLiteral("methodCount")] = QString::fromStdString(methodCountValue);
     }
 
-    data["rootNodes"] = mstch::node(rootNodesArray);
-    data["objectNodes"] = mstch::node(objectNodesArray);
-    data["variableNodes"] = mstch::node(variableNodesArray);
-    data["methodNodes"] = mstch::node(methodNodesArray);
+    data["rootNodes"] = rootNodesArray;
+    jsonData[QStringLiteral("rootNodes")] = jsonRootNodesArray;
 
-    return data;
+    data["objectNodes"] = objectNodesArray;
+    jsonData[QStringLiteral("objectNodes")] = jsonObjectNodesArray;
+
+    data["variableNodes"] = variableNodesArray;
+    jsonData[QStringLiteral("variableNodes")] = jsonVariableNodesArray;
+
+    data["methodNodes"] = methodNodesArray;
+    jsonData[QStringLiteral("methodNodes")] = jsonMethodNodesArray;
+
+    QJsonDocument jsonDoc(jsonData);
+    return std::make_pair(data, jsonDoc);
 }
 
-mstch::map DeviceDriverCore::getCMakeMustacheData()
+std::pair<mustache::data, QJsonDocument> DeviceDriverCore::getCMakeMustacheData()
 {
-    // TODO let the user set the project and executable name
-    mstch::map data;
-    data["projectName"] = mstch::node(
-        Utils::instance()->extractNameFromNamespaceString(m_selectedModelUri).toStdString());
-    data["executableName"] = mstch::node(
-        Utils::instance()->extractNameFromNamespaceString(m_selectedModelUri).toStdString());
+    mustache::data data;
+    QJsonObject jsonData;
+
+    // TODO: Let the user set the project and executable name
+    std::string projectName
+        = Utils::instance()->extractNameFromNamespaceString(m_selectedModelUri).toStdString();
+    data["projectName"] = projectName.empty() ? mustache::data(false) : projectName;
+    jsonData[QStringLiteral("projectName")] = QString::fromStdString(projectName);
+
+    data["executableName"] = projectName.empty() ? mustache::data(false) : projectName;
+    jsonData[QStringLiteral("executableName")] = QString::fromStdString(projectName);
+
     QStringList requiredModels = findRequiredModels(getNodeSetXmlFile(m_currentNodeSetDir));
 
-    mstch::array nodeSetsArray;
-    int i = 0;
+    std::vector<mustache::data> nodeSetsArray;
+    QJsonArray jsonNodeSetsArray;
+
     for (auto it = m_nodeSets.begin(); it != m_nodeSets.end(); ++it) {
         std::shared_ptr<UANodeSet> nodeSet = it.value();
-        mstch::map nodeSetMap;
         QString nodeSetName = nodeSet->getNodeSetName();
-        if (nodeSetName != QStringLiteral("")) {
+
+        if (!nodeSetName.isEmpty()) {
+            std::unordered_map<std::string, mustache::data> nodeSetMap;
+            QJsonObject jsonNodeSetMap;
+
+            std::string nameValue = nodeSetName.toStdString();
+            nodeSetMap["name"] = nameValue.empty() ? mustache::data(false) : nameValue;
+            jsonNodeSetMap[QStringLiteral("name")] = QString::fromStdString(nameValue);
+
+            std::string nameUpperValue = nodeSetName.toUpper().toStdString();
+            nodeSetMap["nameUpper"] = nameUpperValue.empty() ? mustache::data(false)
+                                                             : nameUpperValue;
+            jsonNodeSetMap[QStringLiteral("nameUpper")] = QString::fromStdString(nameUpperValue);
+
             QStringList requiredFiles;
             for (const auto& model : requiredModels) {
                 if (model == nodeSet->getNameSpaceUri()) {
                     requiredFiles = findRequiredFiles({model}, false);
                 } else {
-                    nodeSetMap["depends"] = mstch::node(
-                        Utils::instance()->extractNameFromNamespaceString(model).toStdString());
+                    std::string dependsValue
+                        = Utils::instance()->extractNameFromNamespaceString(model).toStdString();
+                    nodeSetMap["depends"] = dependsValue.empty() ? mustache::data(false)
+                                                                 : dependsValue;
+                    jsonNodeSetMap[QStringLiteral("depends")] = QString::fromStdString(dependsValue);
                 }
             }
 
             for (auto& file : requiredFiles) {
                 file = file.section(QLatin1Char('/'), -1);
-                if (file.contains(QStringLiteral("NodeSet2.xml")))
-                    nodeSetMap["file_ns"] = mstch::node(file.toStdString());
-                if (file.contains(QStringLiteral("NodeIds.csv")))
-                    nodeSetMap["file_csv"] = mstch::node(file.toStdString());
-                if (file.contains(QStringLiteral("Types.bsd")))
-                    nodeSetMap["file_bsd"] = mstch::node(file.toStdString());
+                if (file.contains(QStringLiteral("NodeSet2.xml"))) {
+                    std::string fileNsValue = file.toStdString();
+                    nodeSetMap["file_ns"] = fileNsValue.empty() ? mustache::data(false)
+                                                                : fileNsValue;
+                    jsonNodeSetMap[QStringLiteral("file_ns")] = QString::fromStdString(fileNsValue);
+                }
+                if (file.contains(QStringLiteral("NodeIds.csv"))) {
+                    std::string fileCsvValue = file.toStdString();
+                    nodeSetMap["file_csv"] = fileCsvValue.empty() ? mustache::data(false)
+                                                                  : fileCsvValue;
+                    jsonNodeSetMap[QStringLiteral("file_csv")] = QString::fromStdString(
+                        fileCsvValue);
+                }
+                if (file.contains(QStringLiteral("Types.bsd"))) {
+                    std::string fileBsdValue = file.toStdString();
+                    nodeSetMap["file_bsd"] = fileBsdValue.empty() ? mustache::data(false)
+                                                                  : fileBsdValue;
+                    jsonNodeSetMap[QStringLiteral("file_bsd")] = QString::fromStdString(
+                        fileBsdValue);
+                }
             }
 
-            nodeSetMap["name"] = mstch::node(nodeSetName.toStdString());
-            nodeSetMap["nameUpper"] = mstch::node(nodeSetName.toUpper().toStdString());
             QString nodsetDirPrefix
                 = nodeSet->getNameSpaceUri().section(QChar::fromLatin1('/'), -2, -2);
+            std::string nodsetDirPrefixValue = nodsetDirPrefix.toStdString();
+            nodeSetMap["nodsetDirPrefix"] = nodsetDirPrefixValue.empty() ? mustache::data(false)
+                                                                         : nodsetDirPrefixValue;
+            jsonNodeSetMap[QStringLiteral("nodsetDirPrefix")] = QString::fromStdString(
+                nodsetDirPrefixValue);
 
-            nodeSetMap["nodsetDirPrefix"] = mstch::node(nodsetDirPrefix.toStdString());
-            nodeSetMap["hasCustomTypes"] = mstch::node(nodeSet->getHasCustomTypes());
-            // insert nodesets at the beginning because we need the reverse order for the nodeset compiler
-            nodeSetsArray.insert(nodeSetsArray.cbegin(), nodeSetMap);
+            std::string hasCustomTypesValue = nodeSet->getHasCustomTypes() ? "true" : "false";
+            nodeSetMap["hasCustomTypes"] = hasCustomTypesValue.empty() ? mustache::data(false)
+                                                                       : hasCustomTypesValue;
+            jsonNodeSetMap[QStringLiteral("hasCustomTypes")] = nodeSet->getHasCustomTypes();
+
+            nodeSetsArray.insert(nodeSetsArray.begin(), nodeSetMap); // Reverse order
+            jsonNodeSetsArray.prepend(jsonNodeSetMap);
         }
     }
-    data["nodeSets"] = mstch::node(nodeSetsArray);
-    return data;
+
+    data["nodeSets"] = nodeSetsArray;
+    jsonData[QStringLiteral("nodeSets")] = jsonNodeSetsArray;
+
+    QJsonDocument jsonDoc(jsonData);
+    return std::make_pair(data, jsonDoc);
+}
+
+void DeviceDriverCore::printMustacheData(const QJsonDocument& jsonDoc)
+{
+    QByteArray formattedData = jsonDoc.toJson(QJsonDocument::Indented);
+    qDebug() << "Mustache Data as JSON:";
+    qDebug().noquote() << formattedData;
 }
 
 std::string DeviceDriverCore::loadTemplateFile(const QString& filePath)
@@ -495,67 +749,78 @@ QString DeviceDriverCore::getUserCodeSegment(
     return userCode.trimmed();
 }
 
-QJsonValue DeviceDriverCore::mstchNodeToJsonValue(const mstch::node& node)
-{
-    const std::type_info& type = node.type();
-
-    if (type == typeid(std::string)) {
-        return QString::fromUtf8(boost::get<std::string>(node).c_str());
-    } else if (type == typeid(int)) {
-        return boost::get<int>(node);
-    } else if (type == typeid(double)) {
-        return boost::get<double>(node);
-    } else if (type == typeid(bool)) {
-        return boost::get<bool>(node);
-    } else if (type == typeid(mstch::array)) {
-        QJsonArray jsonArray;
-        const mstch::array& arr = boost::get<mstch::array>(node);
-        for (const auto& elem : arr) {
-            jsonArray.append(mstchNodeToJsonValue(elem));
-        }
-        return jsonArray;
-    } else if (type == typeid(mstch::map)) {
-        QJsonObject jsonObj;
-        const mstch::map& map = boost::get<mstch::map>(node);
-        for (const auto& pair : map) {
-            jsonObj[QString::fromStdString(pair.first)] = mstchNodeToJsonValue(pair.second);
-        }
-        return jsonObj;
-    }
-
-    return QJsonValue();
-}
-
-QJsonObject DeviceDriverCore::mstchMapToJsonObject(const mstch::map& map)
-{
-    QJsonObject jsonObj;
-    for (const auto& pair : map) {
-        jsonObj[QString::fromStdString(pair.first)] = mstchNodeToJsonValue(pair.second);
-    }
-    return jsonObj;
-}
-
-void DeviceDriverCore::generateCode()
+void DeviceDriverCore::generateCode(bool includeCmake, bool includeJson)
 {
     qDebug() << "Generating Code...";
-    auto codeContext = getMustacheData();
-    auto cmakeContext = getCMakeMustacheData();
+
     auto codeTemplate = loadTemplateFile(m_mustacheTemplatePath);
     auto cmakeTemplate = loadTemplateFile(m_cmakeMustacheTemplatePath);
-    saveToFile(m_outputFilePath, mstch::render(codeTemplate, codeContext));
-    saveToFile(m_cmakeOutputFilePath, mstch::render(cmakeTemplate, cmakeContext));
+
+    auto codeContext = getMustacheData();
+    auto cmakeContext = getCMakeMustacheData();
+    mustache::mustache codeTmpl(codeTemplate);
+    mustache::mustache cmakeTmpl(cmakeTemplate);
+
+    printMustacheData(codeContext.second);
+
+    QString projectName = Utils::instance()->extractNameFromNamespaceString(m_selectedModelUri);
+    QString codeFilename = projectName + QStringLiteral(".c");
+    QString cmakeFilename = QStringLiteral("CMakeLists.txt");
+    QString jsonFileName = projectName + QStringLiteral(".json");
+
+#ifndef WASM_BUILD
+    if (includeCmake)
+        saveToFile(m_cmakeOutputFilePath + cmakeFilename, codeTmpl.render(cmakeContext.first));
+    if (includeJson)
+        saveToJson(m_jsonOutputFilePath + jsonFileName, codeContext.second);
+
+    saveToFile(m_outputFilePath + codeFilename, codeTmpl.render(codeContext.first));
+
+    return;
+#endif
+
+    QByteArray codeFileContent = QByteArray::fromStdString(codeTmpl.render(codeContext.first));
+    QByteArray cmakeFileContent = QByteArray::fromStdString(cmakeTmpl.render(cmakeContext.first));
+
+    downloadFile(codeFilename, codeFileContent);
+    if (includeCmake)
+        downloadFile(cmakeFilename, cmakeFileContent);
+    if (includeJson)
+        downloadFile(jsonFileName, codeContext.second.toJson(QJsonDocument::Indented));
 }
 
-void DeviceDriverCore::saveToJson()
+void DeviceDriverCore::downloadFile(const QString& fileName, const QByteArray& fileContent)
+{
+#ifdef WASM_BUILD
+    QString mimeType = QStringLiteral("text/plain");
+
+    QByteArray base64Content = fileContent.toBase64();
+    QString dataUrl = QStringLiteral("data:") + mimeType + QStringLiteral(";base64,")
+                      + QString::fromLatin1(base64Content);
+
+    // Create a Blob and trigger download using JavaScript
+    emscripten::val document = emscripten::val::global("document");
+    emscripten::val a = document.call<emscripten::val>("createElement", std::string("a"));
+
+    a.set("href", dataUrl.toStdString());
+    a.set("download", fileName.toStdString());
+    a.set("style", "display: none");
+
+    document["body"].call<void>("appendChild", a);
+    a.call<void>("click");
+    document["body"].call<void>("removeChild", a);
+#endif
+}
+
+void DeviceDriverCore::saveToJson(const QString& fileName, const QJsonDocument& content)
 {
     qDebug() << "Save to Json...";
-    QJsonDocument jsonDoc = QJsonDocument(mstchMapToJsonObject(getMustacheData()));
 
-    QFile file(m_jsonOutputFilePath);
+    QFile file(fileName);
     if (file.open(QIODevice::WriteOnly)) {
-        file.write(jsonDoc.toJson());
+        file.write(content.toJson());
         file.close();
-        qDebug() << "File saved to:" << m_jsonOutputFilePath;
+        qDebug() << "File saved to:" << fileName;
     } else {
         qWarning("Could not open file for writing");
     }

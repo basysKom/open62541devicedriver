@@ -8,7 +8,7 @@
 #define DEVICEDRIVERCORE_H
 
 #include "childitemfiltermodel.h"
-#include "mstch/mstch.hpp"
+#include "mustache.hpp"
 #include "rootnodefiltermodel.h"
 #include "treemodel.h"
 #include "uanodesetparser.h"
@@ -16,6 +16,16 @@
 #include <QDir>
 #include <QFileInfoList>
 #include <QStringList>
+#ifdef WASM_BUILD
+#include <emscripten.h>
+#include <emscripten/bind.h>
+#include <emscripten/val.h>
+#endif
+
+#include <unordered_map>
+#include <vector>
+
+using namespace kainjow;
 
 class DeviceDriverCore : public QObject
 {
@@ -36,8 +46,8 @@ public:
     Q_INVOKABLE void addRootNodeToSelectionModel(
         const QString& namespaceString, const QString& nodeId);
     Q_INVOKABLE void removeRootNodeFromSelection(const int index);
-    Q_INVOKABLE void generateCode();
-    Q_INVOKABLE void saveToJson();
+    Q_INVOKABLE void generateCode(bool includeCmake, bool includeJson);
+    Q_INVOKABLE void saveToJson(const QString& fileName, const QJsonDocument& content);
 
     TreeModel* deviceTypesModel() const;
     std::shared_ptr<UANode> findNodeById(const QString& namespaceString, const QString& nodeId) const;
@@ -59,6 +69,7 @@ public:
 
     void setCmakeOutputFilePath(const QString& newCmakeOutputFilePath);
 
+    void printMustacheData(const QJsonDocument& jsonDoc);
 signals:
     void selectionModelChanged();
     void childItemFilterModelChanged();
@@ -103,20 +114,31 @@ private:
         QList<TreeItem*>& items,
         const QModelIndex& parent = QModelIndex());
 
-    mstch::map getMustacheData();
-    mstch::map getCMakeMustacheData();
-    mstch::map createNodeMap(int index, TreeItem* item, const QMap<int, QString>& namespaceMap);
-    void getVariableAsMustacheArray(TreeItem* item, mstch::map& nodeMap);
-    void getMethodAsMustacheArray(TreeItem* item, mstch::map& nodeMap);
-    void getArgumentsAsMustacheArray(int index, std::shared_ptr<UAVariable> var, mstch::map& nodeMap);
+    std::pair<std::unordered_map<std::string, mustache::data>, QJsonDocument> getMustacheData();
+    std::pair<mustache::data, QJsonDocument> getCMakeMustacheData();
+
+    std::unordered_map<std::string, mustache::data> createNodeMap(
+        int index, TreeItem* item, const QMap<int, QString>& namespaceMap, QJsonObject& jsonNodeMap);
+    void getVariableAsMustacheArray(
+        TreeItem* item,
+        std::unordered_map<std::string, mustache::data>& nodeMap,
+        QJsonObject& jsonObj);
+    void getMethodAsMustacheArray(
+        TreeItem* item,
+        std::unordered_map<std::string, mustache::data>& nodeMap,
+        QJsonObject& jsonObj);
+    void getArgumentsAsMustacheArray(
+        int index,
+        std::shared_ptr<UAVariable> var,
+        std::unordered_map<std::string, mustache::data>& argMap,
+        QJsonObject& jsonArgMap);
     std::string loadTemplateFile(const QString& filePath);
     void saveToFile(const QString& filePath, const std::string& data);
+    void downloadFile(const QString& fileName, const QByteArray& fileContent);
 
     QString getUserCodeSegment(
         const QString& fileName, const QString& startMarker, const QString& endMarker);
 
-    QJsonValue mstchNodeToJsonValue(const mstch::node& node);
-    QJsonObject mstchMapToJsonObject(const mstch::map& map);
     RootNodeFilterModel* m_rootNodeFilterModel = nullptr;
 };
 

@@ -14,7 +14,7 @@ import "../Components"
 Page {
     id: root
 
-    property int rowHeight: Utils.defaultRowHeight
+    property int rowHeight: isWasm ? Utils.defaultRowHeight * 1.5 : Utils.defaultRowHeight
 
     property var deviceTypesTreemodel: core.deviceTypesModel
     property var childItemModel: core.childItemFilterModel
@@ -38,6 +38,39 @@ Page {
     LoadingSpinner {
         id: globalLoadingSpinner
         z:2
+    }
+
+    Dialog {
+        id: generateCodedialog
+
+        title: "Generate Code"
+        modal: true
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        anchors.centerIn: parent
+
+        width: root.width * 0.25
+        height: root.height * 0.25
+
+        Overlay.modal: Rectangle {
+            color: palette.window
+            opacity: 0.9
+        }
+
+        onAccepted: {
+             core.generateCode(includeCmake.checked, includeJson.checked);
+        }
+
+        ColumnLayout {
+            LabeledCheckbox {
+                id: includeCmake
+
+                labelText: "Include CMakeLists"
+            }
+            LabeledCheckbox {
+                id: includeJson
+                labelText: "Include JSON dump"
+            }
+        }
     }
 
     Dialog {
@@ -87,8 +120,8 @@ Page {
 
             anchors.left: parent.left
             anchors.leftMargin: 10
-            width: Utils.defaultIconSize
-            height: Utils.defaultIconSize
+            width: isWasm ? Utils.defaultIconSize * 2 : 0
+            height: isWasm ? Utils.defaultIconSize * 2 : 0
             anchors.verticalCenter: parent.verticalCenter
             iconSource: "../Icons/help.svg"
             onClicked: {
@@ -99,12 +132,12 @@ Page {
         FolderListModel {
             id: folderModel
 
-            property url folderUrl: "file://"+core.nodeSetPath
+            property url folderUrl: "file://" + core.nodeSetPath
 
             folder: folderUrl
             showDirs: true
         }
-        
+
         LabeledDropdown {
             id: compaionDropdown
 
@@ -139,37 +172,14 @@ Page {
             color: "black"
         }
 
-        RowLayout {
+        Button {
+            id: generateButton
+
             anchors.centerIn: parent
             anchors.margins: 10
-            Button {
-                id: saveButton
-
-                text: "Save to Json"
-                onClicked: {
-                    core.saveToJson();
-                }
-            }
-
-            Button {
-                id: generateButton
-
-                text: "Generate Code"
-                onClicked: {
-                    core.generateCode();
-                }
-            }
-
-            Button {
-                id: backButton
-
-                text: "Back"
-
-
-                visible:false
-                onClicked: {
-                    root.backClicked();
-                }
+            text: "Generate Code"
+            onClicked: {
+                generateCodedialog.open()
             }
         }
     }
@@ -235,8 +245,9 @@ Page {
             IconButton {
                 id: hideButton
 
-                width: Utils.defaultIconSize
-                height: Utils.defaultIconSize
+                width: isWasm ? Utils.defaultIconSize * 1.5 : Utils.defaultIconSize
+                height: isWasm ? Utils.defaultIconSize * 1.5 : Utils.defaultIconSize
+
                 text: scrollView.visible
                 iconSource: "../Icons/arrow.svg"
                 color: root.palette.text
@@ -392,6 +403,7 @@ Page {
                 id: detailLoader
 
                 anchors.fill: parent
+                anchors.topMargin: isWasm ? Utils.defaultPadding : 0
 
                 property var sourceItem: null
 
@@ -399,13 +411,13 @@ Page {
                     if (sourceItem)
                     {
                         currentChildrenTreeView.expand(0);
-                        sourceComponent = rootObjectDelegate;
+                        sourceComponent = rootDelegate;
                     }
                 }
             }
 
             Component {
-                id: rootObjectDelegate
+                id: rootDelegate
 
                 RootObjectDelegate {
                     anchors.fill: parent
@@ -526,7 +538,7 @@ Page {
                     flickableDirection: Flickable.VerticalFlick
                     model: childItemModel
 
-                    rowSpacing: Utils.smallSpacing
+                    rowSpacing: isWasm? Utils.defaultSpacing : Utils.smallSpacing
 
                     reuseItems: false
 

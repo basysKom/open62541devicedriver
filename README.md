@@ -154,7 +154,7 @@ Keep in mind that you need to implement the read/write and method callbacks to g
 
 ## Getting open62541DeviceDriver
 
-This Project uses the [UA-Nodeset](https://github.com/OPCFoundation/UA-Nodeset) and the C++ Mustache Implementation [mstch](https://github.com/no1msd/mstch) as submodules.
+This Project uses the [UA-Nodeset](https://github.com/OPCFoundation/UA-Nodeset) and the C++ Single Header Mustache Implementation [Mustache](https://github.com/kainjow/Mustache/).
 
 Clone the Project and checkout the submodules
 
@@ -165,6 +165,7 @@ git clone --recursive XXX
 ## Dependencies
 
 - Qt 6.8.2
+- For WebAssembly use Emscripten v. 3.1.56
 
 ## Building
 

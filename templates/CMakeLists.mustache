@@ -37,7 +37,7 @@ include(open62541Macros)
 {{/nodeSets}}
 
 add_executable({{executableName}}
-    output.c
+    {{executableName}}.c
     {{#nodeSets}}
         ${UA_NODESET_{{nameUpper}}_SOURCES}
         ${UA_TYPES_{{nameUpper}}_SOURCES}
