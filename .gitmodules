@@ -1,6 +1,4 @@
 [submodule "UA-Nodeset"]
 	path = UA-Nodeset
 	url = https://github.com/OPCFoundation/UA-Nodeset
-[submodule "mstch"]
-	path = mstch
-	url = https://github.com/no1msd/mstch.git
+

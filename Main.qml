@@ -16,9 +16,23 @@ Window {
     height: Utils.mainWindowHeight
     title: qsTr("Device Driver")
 
+    palette.window: "#2A2A2A"
+    palette.windowText: "white"
+    palette.base: "#8A8A8A"
+    palette.text: "white"
+    palette.highlight: "#BB86FC"
+    palette.highlightedText: "black"
+
     NodeSelectionGridScreen {
         id: nodeSelectionGrid
+
         anchors.fill: parent
+        anchors.margins: isWasm ? 80 : 0
+
+        background: Rectangle {
+            color: palette.window
+            radius: 20
+        }
     }
 }
 

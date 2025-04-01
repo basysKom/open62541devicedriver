@@ -26,7 +26,10 @@ TreeViewDelegate {
             id: icon
 
             anchors.right: parent.left
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: isWasm ? Utils.smallIconSize - 4 : 0
             anchors.rightMargin: Utils.smallSpacing
+
             source: {
                 switch (model.typeName) {
                 case "UAObjectType":
@@ -78,6 +81,10 @@ TreeViewDelegate {
                         console.log(model.nodeId, "added to selection.")
                         core.addRootNodeToSelectionModel(model.namespaceString, model.nodeId);
                     }
+
+                    palette.windowText: "black"
+                    palette.light: "white"
+                    palette.midlight: "#8A8A8A"
                 }
             }
         }

@@ -33,13 +33,41 @@ endif()
 
 add_definitions(-DQT_NO_CAST_FROM_ASCII)
 
-find_package(Qt6 6.7 REQUIRED COMPONENTS ${QT_COMPONENTS})
+find_package(Qt6 6.8 REQUIRED COMPONENTS ${QT_COMPONENTS})
 
-qt_standard_project_setup(REQUIRES 6.7)
+qt_standard_project_setup(REQUIRES 6.8)
 
 qt_add_executable(${TARGET_NAME}
     main.cpp
 )
+
+
+
+# WebAssembly
+if (CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+    message(STATUS "Compiling for WebAssembly")
+
+    set(TEMPLATE_FILES_DIR  ${CMAKE_BINARY_DIR}/templates)
+    file(MAKE_DIRECTORY ${TEMPLATE_FILES_DIR})
+
+    set(COPY_FILES_DIR ${CMAKE_BINARY_DIR}/data)
+    file(MAKE_DIRECTORY ${COPY_FILES_DIR})
+
+    # Copy your folders into the WebAssembly virtual FS
+    message(${CMAKE_SOURCE_DIR})
+    file(COPY ${CMAKE_SOURCE_DIR}/UA-Nodeset/ DESTINATION ${COPY_FILES_DIR})
+
+    message(${CMAKE_SOURCE_DIR})
+    file(COPY ${CMAKE_SOURCE_DIR}/templates/ DESTINATION ${TEMPLATE_FILES_DIR})
+
+    # Tell Emscripten to mount this directory in the virtual filesystem
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --preload-file ${COPY_FILES_DIR}@/data")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --preload-file ${TEMPLATE_FILES_DIR}@/templates")
+    add_definitions(-DWASM_BUILD)
+
+else()
+    message(STATUS "Compiling for native platform")
+endif()
 
 # Enable Address Sanitizer if ENABLE_ASAN is ON
 option(ENABLE_ASAN "Enable Address Sanitizer" OFF)
@@ -100,11 +128,8 @@ qt_add_qml_module(${TARGET_NAME}
     QML_FILES ${QML_FILES}
     SOURCES ${SOURCES}
     RESOURCES ${RESOURCES}
+    SOURCES mustache.hpp
 )
-
-# Add subdirectory for mstch
-add_subdirectory(mstch)
-include_directories(${mstch_INCLUDE_DIR})
 
 # Set macOS and Windows bundle properties
 set_target_properties(${TARGET_NAME} PROPERTIES
@@ -116,7 +141,7 @@ set_target_properties(${TARGET_NAME} PROPERTIES
 
 target_link_libraries(${TARGET_NAME}
     PRIVATE Qt6::Quick
-    mstch
+    # mstch
 )
 
 # Link Qt6::Test only if ENABLE_MODEL_TESTER is ON
