@@ -385,16 +385,22 @@ void TreeModel::setupModelData(std::shared_ptr<UANodeSet> nodeSet)
 }
 
 void TreeModel::addRootNode(
-    std::shared_ptr<UANode> node, bool resolveSelection, bool useUniqueBrowseNames)
+    std::shared_ptr<UANode> node,
+    bool resolveSelection,
+    bool useUniqueBrowseNames,
+    bool safeOriginalBrowseName)
 {
-    if (useUniqueBrowseNames)
+    if (useUniqueBrowseNames) {
         node->setBrowseName(makeBrowseNameUnique(node->browseName()));
+        if (safeOriginalBrowseName)
+            node->setUniqueBaseBrowseName(node->browseName());
+    }
     node->setIsRootNode(true);
     std::shared_ptr<TreeItem> rootItem = std::make_shared<TreeItem>(node, m_rootItem);
     connect(rootItem.get(), &TreeItem::forceUpdate, this, &TreeModel::onForceUpdate);
 
     m_rootItem->appendChild(rootItem);
-    addChildNodes(rootItem, useUniqueBrowseNames);
+    addChildNodes(rootItem, useUniqueBrowseNames, safeOriginalBrowseName);
 
     // Collect and add inherited nodes
     QSet<std::shared_ptr<UANode>> inheritedNodes;
@@ -406,7 +412,8 @@ void TreeModel::addRootNode(
         for (const auto& reference : inheritedNode->references()) {
             // FIXME we should allow to generate optional nodes but then there are duplicates...
             if (isValidChildNode(reference) /* && !reference->node()->isOptional()*/) {
-                addNodeToTree(rootItem, reference->node(), useUniqueBrowseNames);
+                addNodeToTree(
+                    rootItem, reference->node(), useUniqueBrowseNames, safeOriginalBrowseName);
             }
         }
     }
@@ -421,7 +428,7 @@ void TreeModel::addRootNodeToSelection(std::shared_ptr<UANode> node)
 {
     int newRowIndex = m_rootItem->childCount();
     beginInsertRows(QModelIndex(), newRowIndex, newRowIndex);
-    addRootNode(node, true, true);
+    addRootNode(node, true, true, true);
     endInsertRows();
 }
 
@@ -461,7 +468,8 @@ void TreeModel::collectInheritedNodes(
     }
 }
 
-void TreeModel::addChildNodes(std::shared_ptr<TreeItem> parent, bool useUniqueBrowseNames)
+void TreeModel::addChildNodes(
+    std::shared_ptr<TreeItem> parent, bool useUniqueBrowseNames, bool safeOriginalBrowseName)
 {
     if (!parent)
         return;
@@ -479,7 +487,7 @@ void TreeModel::addChildNodes(std::shared_ptr<TreeItem> parent, bool useUniqueBr
 
     for (const auto& reference : node->references()) {
         if (isValidChildNode(reference) && reference->isForward()) {
-            addNodeToTree(parent, reference->node(), useUniqueBrowseNames);
+            addNodeToTree(parent, reference->node(), useUniqueBrowseNames, safeOriginalBrowseName);
         }
     }
 
@@ -515,27 +523,30 @@ bool TreeModel::shouldAddInheritedNode(const std::shared_ptr<Reference> referenc
 void TreeModel::addNodeToTree(
     std::shared_ptr<TreeItem> parentItem,
     std::shared_ptr<UANode> childNode,
-    bool useUniqueBrowseNames)
+    bool useUniqueBrowseNames,
+    bool safeOriginalBrowseName)
 {
     if (!parentItem || !childNode)
         return;
 
-    auto cildNodeCopy = childNode->clone();
+    auto childNodeCopy = childNode->clone();
     if (useUniqueBrowseNames)
-        cildNodeCopy->setBrowseName(makeBrowseNameUnique(cildNodeCopy->browseName()));
+        childNodeCopy->setBrowseName(makeBrowseNameUnique(childNodeCopy->browseName()));
+    if (safeOriginalBrowseName)
+        childNodeCopy->setUniqueBaseBrowseName(childNodeCopy->browseName());
 
     auto parentNamespaceMap = Utils::instance()->currentNameSpaceMaps().value(
         parentItem->namespaceString());
-    if (parentItem->namespaceString() != cildNodeCopy->namespaceString()) {
-        cildNodeCopy->changeNamespaceId(parentNamespaceMap.key(cildNodeCopy->namespaceString()));
+    if (parentItem->namespaceString() != childNodeCopy->namespaceString()) {
+        childNodeCopy->changeNamespaceId(parentNamespaceMap.key(childNodeCopy->namespaceString()));
     }
 
-    std::shared_ptr<TreeItem> childItem = std::make_shared<TreeItem>(cildNodeCopy, parentItem);
+    std::shared_ptr<TreeItem> childItem = std::make_shared<TreeItem>(childNodeCopy, parentItem);
     connect(childItem.get(), &TreeItem::forceUpdate, this, &TreeModel::onForceUpdate);
 
     parentItem->appendChild(childItem);
 
-    addChildNodes(childItem, useUniqueBrowseNames);
+    addChildNodes(childItem, useUniqueBrowseNames, safeOriginalBrowseName);
 }
 
 QString TreeModel::makeBrowseNameUnique(const QString& browseName) const

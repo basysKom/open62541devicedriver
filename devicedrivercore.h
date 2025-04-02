@@ -48,6 +48,8 @@ public:
     Q_INVOKABLE void removeRootNodeFromSelection(const int index);
     Q_INVOKABLE void generateCode(bool includeCmake, bool includeJson);
     Q_INVOKABLE void saveToJson(const QString& fileName, const QJsonDocument& content);
+    Q_INVOKABLE void loadState(const QString& filePath);
+    Q_INVOKABLE void saveProject();
 
     TreeModel* deviceTypesModel() const;
     std::shared_ptr<UANode> findNodeById(const QString& namespaceString, const QString& nodeId) const;

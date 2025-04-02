@@ -62,7 +62,8 @@ public:
     void addRootNode(
         std::shared_ptr<UANode> node,
         bool resolveSelection = false,
-        bool useUniqueBrowseNames = false);
+        bool useUniqueBrowseNames = false,
+        bool safeOriginalBrowseName = false);
     void addRootNodeToSelection(std::shared_ptr<UANode> node);
     void removeRootNodeFromSelection(const int index);
     void resetModel();
@@ -92,13 +93,17 @@ private:
     std::shared_ptr<TreeItem> m_rootItem;
     std::shared_ptr<TreeItem> m_currentItem;
 
-    void addChildNodes(std::shared_ptr<TreeItem> parent, bool useUniqueBrowseNames = false);
+    void addChildNodes(
+        std::shared_ptr<TreeItem> parent,
+        bool useUniqueBrowseNames = false,
+        bool safeOriginalBrowseName = false);
     void collectInheritedNodes(std::shared_ptr<UANode> node, QSet<std::shared_ptr<UANode>>& nodes);
     bool isValidChildNode(const std::shared_ptr<Reference> reference) const;
     void addNodeToTree(
         std::shared_ptr<TreeItem> parentItem,
         std::shared_ptr<UANode> childNode,
-        bool useUniqueBrowseNames = false);
+        bool useUniqueBrowseNames = false,
+        bool safeOriginalBrowseName = false);
     bool shouldAddInheritedNode(const std::shared_ptr<Reference> reference) const;
     std::shared_ptr<TreeItem> findItemByBrowseNameRecursive(
         std::shared_ptr<TreeItem> parent, const QString& name) const;

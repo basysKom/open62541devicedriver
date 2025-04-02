@@ -9,6 +9,6 @@ NodeDelegateBase {
     id: delegate
 
     iconSource: "../Icons/method.svg"
-    disabledFields: ["nodeId", "displayName", "description", "browseName"]
+    disabledFields: ["nodeId"]
 
 }

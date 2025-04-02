@@ -8,6 +8,7 @@ import QtQuick
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import Qt.labs.folderlistmodel 2.6
+import QtQuick.Dialogs 6.2
 import Utils 1.0
 import "../Components"
 
@@ -157,6 +158,28 @@ Page {
                 });
             }
         }
+
+        Button {
+            id: loadButton
+            anchors.left: compaionDropdown.right
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.leftMargin: Utils.defaultSpacing
+            text: "Load Project JSON"
+
+            onClicked: fileDialog.open();
+        }
+
+        FileDialog {
+               id: fileDialog
+               title: "Select Project File"
+               fileMode: FileDialog.OpenFile
+               nameFilters: ["JSON Files (*.json)", "All Files (*)"]
+
+               onAccepted: {
+                globalLoadingSpinner.showSpinner();
+                core.loadState(fileDialog.selectedFile);
+               }
+           }
     }
 
     footer: Rectangle {
@@ -172,14 +195,24 @@ Page {
             color: "black"
         }
 
-        Button {
-            id: generateButton
-
+        RowLayout {
             anchors.centerIn: parent
             anchors.margins: 10
-            text: "Generate Code"
-            onClicked: {
-                generateCodedialog.open()
+
+            Button {
+                id: generateButton
+
+                text: "Generate Code"
+                onClicked: {
+                    generateCodedialog.open()
+                }
+            }
+
+            Button {
+                id: saveProject
+
+                text: "Save Project"
+                onClicked: core.saveProject()
             }
         }
     }

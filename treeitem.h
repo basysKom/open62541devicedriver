@@ -56,6 +56,8 @@ class TreeItem : public QObject, public std::enable_shared_from_this<TreeItem>
     Q_PROPERTY(bool isForward READ isForward WRITE setIsForward NOTIFY isForwardChanged)
     Q_PROPERTY(
         UANode* referenceNode READ referenceNode WRITE setReferenceNode NOTIFY referenceNodeChanged)
+    Q_PROPERTY(QString uniqueBaseBrowseName READ uniqueBaseBrowseName WRITE setUniqueBaseBrowseName
+                   NOTIFY uniqueBaseBrowseNameChanged)
 
 public:
     explicit TreeItem(std::shared_ptr<UANode> node, std::shared_ptr<TreeItem> parentItem = nullptr);
@@ -150,6 +152,9 @@ public:
     bool isParentSelected() const;
     void setIsParentSelected(bool newIsParentSelected);
 
+    QString uniqueBaseBrowseName() const;
+    void setUniqueBaseBrowseName(const QString& newUniqueBaseBrowseName);
+
 signals:
     void nodeIdChanged();
     void parentNodeIdChanged();
@@ -178,6 +183,7 @@ signals:
     void nodeVariableNameChanged();
     void isParentSelectedChanged();
     void forceUpdate();
+    void uniqueBaseBrowseNameChanged();
 
 private:
     QList<std::shared_ptr<TreeItem>> m_childItems;

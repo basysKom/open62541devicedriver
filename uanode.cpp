@@ -201,6 +201,16 @@ void UANode::setBaseBrowseName(const QString& newBaseBrowseName)
     m_baseBrowseName = newBaseBrowseName;
 }
 
+QString UANode::uniqueBaseBrowseName() const
+{
+    return m_uniqueBaseBrowseName;
+}
+
+void UANode::setUniqueBaseBrowseName(const QString& newUniqueBaseBrowseName)
+{
+    m_uniqueBaseBrowseName = newUniqueBaseBrowseName;
+}
+
 UADataType::UADataType(const UADataType& other)
     : UANode(other)
     , m_definitionName(other.m_definitionName)
