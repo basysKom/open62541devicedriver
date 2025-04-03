@@ -476,3 +476,16 @@ void TreeItem::setIsParentSelected(bool newIsParentSelected)
     }
     emit isParentSelectedChanged();
 }
+
+QString TreeItem::uniqueBaseBrowseName() const
+{
+    return m_node->uniqueBaseBrowseName();
+}
+
+void TreeItem::setUniqueBaseBrowseName(const QString& newUniqueBaseBrowseName)
+{
+    if (m_node->uniqueBaseBrowseName() == newUniqueBaseBrowseName)
+        return;
+    m_node->setUniqueBaseBrowseName(newUniqueBaseBrowseName);
+    emit uniqueBaseBrowseNameChanged();
+}

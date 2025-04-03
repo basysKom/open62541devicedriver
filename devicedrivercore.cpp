@@ -107,6 +107,7 @@ void DeviceDriverCore::selectNodeSetXML(const QString& nodeSetDir)
 void DeviceDriverCore::addRootNodeToSelectionModel(
     const QString& namespaceString, const QString& nodeId)
 {
+    qDebug() << "adding: " << namespaceString << " " << nodeId;
     std::shared_ptr<UANode> node = findNodeById(namespaceString, nodeId);
     if (node) {
         std::shared_ptr<UANode> nodeCopy = node->clone();
@@ -163,8 +164,11 @@ void DeviceDriverCore::getVariableAsMustacheArray(
     jsonObj[QStringLiteral("typesArrayIndexAlias")] = QString::fromStdString(
         typesArrayIndexAliasValue);
 
+    QString filePath = m_outputFilePath
+                       + Utils::instance()->extractNameFromNamespaceString(m_selectedModelUri)
+                       + QStringLiteral(".c");
     std::string readUserCodeValue = getUserCodeSegment(
-                                        m_outputFilePath,
+                                        filePath,
                                         QStringLiteral("//BEGIN user code read ") + nameStr,
                                         QStringLiteral("//END user code read ") + nameStr)
                                         .toStdString();
@@ -172,7 +176,7 @@ void DeviceDriverCore::getVariableAsMustacheArray(
     jsonObj[QStringLiteral("readUserCode")] = QString::fromStdString(readUserCodeValue);
 
     std::string writeUserCodeValue = getUserCodeSegment(
-                                         m_outputFilePath,
+                                         filePath,
                                          QStringLiteral("//BEGIN user code write ") + nameStr,
                                          QStringLiteral("//END user code write ") + nameStr)
                                          .toStdString();
@@ -728,8 +732,10 @@ QString DeviceDriverCore::getUserCodeSegment(
     const QString& fileName, const QString& startMarker, const QString& endMarker)
 {
     QFile file(fileName);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        qWarning() << "Cannot open file:" << fileName << file.errorString();
         return QString();
+    }
 
     QTextStream in(&file);
     bool capture = false;
@@ -1088,6 +1094,111 @@ QString DeviceDriverCore::getNodeSetXmlFile(const QString& dir)
         }
     }
     return QString();
+}
+
+void DeviceDriverCore::loadState(const QString& filePath)
+{
+#ifdef WASM_BUILD
+    qDebug() << "Loading not supported for WebAssembly right now";
+    return;
+#endif
+    QUrl url(filePath);
+    QFile file;
+    file.setFileName(url.toLocalFile());
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        qWarning() << "Could not open file for reading:" << filePath;
+        return;
+    }
+    QJsonDocument jsonDoc = QJsonDocument::fromJson(file.readAll());
+    file.close();
+
+    if (jsonDoc.isNull()) {
+        qWarning() << "Failed to parse JSON from file:" << filePath;
+        return;
+    }
+
+    QJsonObject jsonObj = jsonDoc.object();
+    printMustacheData(jsonDoc);
+    QJsonArray rootNodes = jsonObj[QStringLiteral("rootNodes")].toArray();
+    QJsonArray selectedNodes = jsonObj[QStringLiteral("selectedNodes")].toArray();
+
+    connect(
+        this,
+        &DeviceDriverCore::setupFinished,
+        this,
+        [this, rootNodes, selectedNodes]() {
+            for (const QJsonValue& rootNodeVal : rootNodes) {
+                if (!rootNodeVal.isObject()) {
+                    qWarning() << "Invalid rootNode format!";
+                    continue;
+                }
+                QJsonObject rootNode = rootNodeVal.toObject();
+
+                addRootNodeToSelectionModel(
+                    rootNode[QStringLiteral("uri")].toString(),
+                    rootNode[QStringLiteral("nodeId")].toString());
+                auto node = m_selectionModel->getItemByName(
+                    rootNode[QStringLiteral("originalUniqueBrowseName")].toString());
+                node->setDisplayName(rootNode[QStringLiteral("displayName")].toString());
+                node->setBrowseName(rootNode[QStringLiteral("browseName")].toString());
+                node->setDescription(rootNode[QStringLiteral("description")].toString());
+            }
+
+            for (const QJsonValue& selectedNodeVal : selectedNodes) {
+                if (!selectedNodeVal.isObject()) {
+                    qWarning() << "Invalid selectedNode format!";
+                    continue;
+                }
+                QJsonObject selectedNode = selectedNodeVal.toObject();
+                auto node = m_selectionModel->getItemByName(
+                    selectedNode[QStringLiteral("originalUniqueBrowseName")].toString());
+                node->setSelected(true);
+                node->setDisplayName(selectedNode[QStringLiteral("displayName")].toString());
+                node->setBrowseName(selectedNode[QStringLiteral("browseName")].toString());
+                node->setDescription(selectedNode[QStringLiteral("description")].toString());
+            }
+        });
+
+    selectNodeSetXML(jsonObj[QStringLiteral("selectedNodeSetXML")].toString());
+}
+
+void DeviceDriverCore::saveProject()
+{
+    QJsonObject data;
+    QJsonArray rootNodes;
+    QJsonArray selectedNodes;
+    QList<TreeItem*> allNodes = getSelectedItems();
+
+    data[QStringLiteral("selectedNodeSetXML")] = m_currentNodeSetDir;
+
+    for (auto node : allNodes) {
+        if (node->isRootNode()) {
+            QJsonObject rootNodeData;
+            rootNodeData[QStringLiteral("uri")] = node->namespaceString();
+            rootNodeData[QStringLiteral("nodeId")] = node->nodeId();
+            rootNodeData[QStringLiteral("displayName")] = node->displayName();
+            rootNodeData[QStringLiteral("description")] = node->description();
+            rootNodeData[QStringLiteral("browseName")] = node->browseName();
+            rootNodeData[QStringLiteral("originalUniqueBrowseName")] = node->uniqueBaseBrowseName();
+            rootNodes.append(rootNodeData);
+        } else {
+            QJsonObject selectedNodeData;
+            selectedNodeData[QStringLiteral("nodeId")] = node->nodeId();
+            selectedNodeData[QStringLiteral("displayName")] = node->displayName();
+            selectedNodeData[QStringLiteral("description")] = node->description();
+            selectedNodeData[QStringLiteral("browseName")] = node->browseName();
+            selectedNodeData[QStringLiteral("originalUniqueBrowseName")] = node->uniqueBaseBrowseName();
+            selectedNodes.append(selectedNodeData);
+        }
+    }
+
+    data[QStringLiteral("rootNodes")] = rootNodes;
+    data[QStringLiteral("selectedNodes")] = selectedNodes;
+#ifndef WASM_BUILD
+    saveToJson(m_outputFilePath + QStringLiteral("project.json"), QJsonDocument(data));
+    return;
+#endif
+    downloadFile(QStringLiteral("project.json"), QJsonDocument(data).toJson(QJsonDocument::Indented));
 }
 
 TreeModel* DeviceDriverCore::selectionModel() const

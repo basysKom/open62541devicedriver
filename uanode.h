@@ -92,10 +92,17 @@ public:
 
     void setBaseBrowseName(const QString& newBaseBrowseName);
 
+    QString uniqueBaseBrowseName() const;
+    void setUniqueBaseBrowseName(const QString& newUniqueBaseBrowseName);
+
+signals:
+    void uniqueBaseBrowseNameChanged();
+
 private:
     QString m_nodeId;
     QString m_browseName;
     QString m_baseBrowseName;
+    QString m_uniqueBaseBrowseName;
     QString m_displayName;
     QString m_nodeVariableName;
     QString m_description;
@@ -105,6 +112,8 @@ private:
     std::weak_ptr<UANode> m_parentNode;
     bool m_isOptional = false;
     bool m_isRootNode = false;
+    Q_PROPERTY(QString uniqueBaseBrowseName READ uniqueBaseBrowseName WRITE setUniqueBaseBrowseName
+                   NOTIFY uniqueBaseBrowseNameChanged FINAL)
 };
 
 class UADataType : public UANode
