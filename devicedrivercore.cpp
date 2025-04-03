@@ -1120,15 +1120,13 @@ void DeviceDriverCore::loadState(const QString& filePath)
     QJsonObject jsonObj = jsonDoc.object();
     printMustacheData(jsonDoc);
     QJsonArray rootNodes = jsonObj[QStringLiteral("rootNodes")].toArray();
-    QJsonArray variableNodes = jsonObj[QStringLiteral("variableNodes")].toArray();
-    QJsonArray methodNodes = jsonObj[QStringLiteral("methodNodes")].toArray();
-    QJsonArray objectNodes = jsonObj[QStringLiteral("objectNodes")].toArray();
+    QJsonArray selectedNodes = jsonObj[QStringLiteral("selectedNodes")].toArray();
 
     connect(
         this,
         &DeviceDriverCore::setupFinished,
         this,
-        [this, rootNodes, variableNodes, methodNodes, objectNodes]() {
+        [this, rootNodes, selectedNodes]() {
             for (const QJsonValue& rootNodeVal : rootNodes) {
                 if (!rootNodeVal.isObject()) {
                     qWarning() << "Invalid rootNode format!";
@@ -1146,46 +1144,18 @@ void DeviceDriverCore::loadState(const QString& filePath)
                 node->setDescription(rootNode[QStringLiteral("description")].toString());
             }
 
-            for (const QJsonValue& variableNodeVal : variableNodes) {
-                if (!variableNodeVal.isObject()) {
-                    qWarning() << "Invalid rootNode format!";
+            for (const QJsonValue& selectedNodeVal : selectedNodes) {
+                if (!selectedNodeVal.isObject()) {
+                    qWarning() << "Invalid selectedNode format!";
                     continue;
                 }
-                QJsonObject variableNode = variableNodeVal.toObject();
+                QJsonObject selectedNode = selectedNodeVal.toObject();
                 auto node = m_selectionModel->getItemByName(
-                    variableNode[QStringLiteral("originalUniqueBrowseName")].toString());
+                    selectedNode[QStringLiteral("originalUniqueBrowseName")].toString());
                 node->setSelected(true);
-                node->setDisplayName(variableNode[QStringLiteral("displayName")].toString());
-                node->setBrowseName(variableNode[QStringLiteral("browseName")].toString());
-                node->setDescription(variableNode[QStringLiteral("description")].toString());
-            }
-
-            for (const QJsonValue& methodNodeVal : methodNodes) {
-                if (!methodNodeVal.isObject()) {
-                    qWarning() << "Invalid rootNode format!";
-                    continue;
-                }
-                QJsonObject methodNode = methodNodeVal.toObject();
-                auto node = m_selectionModel->getItemByName(
-                    methodNode[QStringLiteral("originalUniqueBrowseName")].toString());
-                node->setSelected(true);
-                node->setDisplayName(methodNode[QStringLiteral("displayName")].toString());
-                node->setBrowseName(methodNode[QStringLiteral("browseName")].toString());
-                node->setDescription(methodNode[QStringLiteral("description")].toString());
-            }
-
-            for (const QJsonValue& objectNodeVal : objectNodes) {
-                if (!objectNodeVal.isObject()) {
-                    qWarning() << "Invalid rootNode format!";
-                    continue;
-                }
-                QJsonObject objectNode = objectNodeVal.toObject();
-                auto node = m_selectionModel->getItemByName(
-                    objectNode[QStringLiteral("originalUniqueBrowseName")].toString());
-                node->setSelected(true);
-                node->setDisplayName(objectNode[QStringLiteral("displayName")].toString());
-                node->setBrowseName(objectNode[QStringLiteral("browseName")].toString());
-                node->setDescription(objectNode[QStringLiteral("description")].toString());
+                node->setDisplayName(selectedNode[QStringLiteral("displayName")].toString());
+                node->setBrowseName(selectedNode[QStringLiteral("browseName")].toString());
+                node->setDescription(selectedNode[QStringLiteral("description")].toString());
             }
         });
 
@@ -1196,9 +1166,7 @@ void DeviceDriverCore::saveProject()
 {
     QJsonObject data;
     QJsonArray rootNodes;
-    QJsonArray objectNodes;
-    QJsonArray variableNodes;
-    QJsonArray methodNodes;
+    QJsonArray selectedNodes;
     QList<TreeItem*> allNodes = getSelectedItems();
 
     data[QStringLiteral("selectedNodeSetXML")] = m_currentNodeSetDir;
@@ -1213,40 +1181,19 @@ void DeviceDriverCore::saveProject()
             rootNodeData[QStringLiteral("browseName")] = node->browseName();
             rootNodeData[QStringLiteral("originalUniqueBrowseName")] = node->uniqueBaseBrowseName();
             rootNodes.append(rootNodeData);
-        } else if (node->typeName() == XmlTags::UAObject) {
-            QJsonObject objectNodeData;
-            objectNodeData[QStringLiteral("nodeId")] = node->nodeId();
-            objectNodeData[QStringLiteral("displayName")] = node->displayName();
-            objectNodeData[QStringLiteral("description")] = node->description();
-            objectNodeData[QStringLiteral("browseName")] = node->browseName();
-            objectNodeData[QStringLiteral("originalUniqueBrowseName")]
-                = node->uniqueBaseBrowseName();
-            objectNodes.append(objectNodeData);
-        } else if (node->typeName() == XmlTags::UAVariable) {
-            QJsonObject variableNodeData;
-            variableNodeData[QStringLiteral("nodeId")] = node->nodeId();
-            variableNodeData[QStringLiteral("displayName")] = node->displayName();
-            variableNodeData[QStringLiteral("description")] = node->description();
-            variableNodeData[QStringLiteral("browseName")] = node->browseName();
-            variableNodeData[QStringLiteral("originalUniqueBrowseName")]
-                = node->uniqueBaseBrowseName();
-            variableNodes.append(variableNodeData);
-        } else if (node->typeName() == XmlTags::UAMethod) {
-            QJsonObject methodNodeData;
-            methodNodeData[QStringLiteral("nodeId")] = node->nodeId();
-            methodNodeData[QStringLiteral("displayName")] = node->displayName();
-            methodNodeData[QStringLiteral("description")] = node->description();
-            methodNodeData[QStringLiteral("browseName")] = node->browseName();
-            methodNodeData[QStringLiteral("originalUniqueBrowseName")]
-                = node->uniqueBaseBrowseName();
-            methodNodes.append(methodNodeData);
+        } else {
+            QJsonObject selectedNodeData;
+            selectedNodeData[QStringLiteral("nodeId")] = node->nodeId();
+            selectedNodeData[QStringLiteral("displayName")] = node->displayName();
+            selectedNodeData[QStringLiteral("description")] = node->description();
+            selectedNodeData[QStringLiteral("browseName")] = node->browseName();
+            selectedNodeData[QStringLiteral("originalUniqueBrowseName")] = node->uniqueBaseBrowseName();
+            selectedNodes.append(selectedNodeData);
         }
     }
 
     data[QStringLiteral("rootNodes")] = rootNodes;
-    data[QStringLiteral("objectNodes")] = objectNodes;
-    data[QStringLiteral("variableNodes")] = variableNodes;
-    data[QStringLiteral("methodNodes")] = methodNodes;
+    data[QStringLiteral("selectedNodes")] = selectedNodes;
 #ifndef WASM_BUILD
     saveToJson(m_outputFilePath + QStringLiteral("project.json"), QJsonDocument(data));
     return;
