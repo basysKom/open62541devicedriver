@@ -129,6 +129,7 @@ qt_add_qml_module(${TARGET_NAME}
     SOURCES ${SOURCES}
     RESOURCES ${RESOURCES}
     SOURCES mustache.hpp
+    QML_FILES Components/FlatButton.qml
 )
 
 # Set macOS and Windows bundle properties

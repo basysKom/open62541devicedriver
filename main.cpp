@@ -101,12 +101,7 @@ int main(int argc, char* argv[])
             .filePath(QStringLiteral("../../templates/CMakeLists.mustache")));
 #endif
 
-    core.setOutputFilePath(
-        QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("../../templates/")));
-    core.setJsonOutputFilePath(
-        QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("../../templates/")));
-    core.setCmakeOutputFilePath(
-        QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("../../templates/")));
+    core.setOutputFilePath(QDir(QCoreApplication::applicationDirPath()).path());
 
     engine.rootContext()->setContextProperty(QStringLiteral("core"), &core);
     engine.rootContext()->setContextProperty(QStringLiteral("isWasm"), isWasm);

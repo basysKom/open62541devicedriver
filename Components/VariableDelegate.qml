@@ -20,7 +20,12 @@ NodeDelegateBase {
 
         modal: true
         standardButtons: Dialog.Close
-
+        footer: DialogButtonBox {
+            visible: count > 0
+            delegate: FlatButton {
+                width: valueDialog.count === 1 ? valueDialog.availableWidth / 2 : undefined
+            }
+        }
         anchors.centerIn: parent
 
         width: Utils.mainWindowWidth * 0.3
@@ -86,7 +91,8 @@ NodeDelegateBase {
 
             onEditingStarted: valueDialog.open()
         }
-        Button {
+
+        FlatButton {
             id: setValueButton
 
             Layout.alignment: Qt.AlignHCenter

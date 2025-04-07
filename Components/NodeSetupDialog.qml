@@ -14,6 +14,12 @@ Dialog {
     title: "Title"
     modal: true
     standardButtons: Dialog.Close
+    footer: DialogButtonBox {
+        visible: count > 0
+        delegate: FlatButton {
+            width: dialog.count === 1 ? dialog.availableWidth / 2 : undefined
+        }
+    }
 
     property alias sourceItem: detailLoader.sourceItem
 

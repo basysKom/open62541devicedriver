@@ -7,8 +7,7 @@
 import QtQuick
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
-import Qt.labs.folderlistmodel 2.6
-import QtQuick.Dialogs 6.2
+import QtQuick.Dialogs
 import Utils 1.0
 import "../Components"
 
@@ -22,6 +21,8 @@ Page {
     property var selectedTreeModel: core.selectionModel
     property var rootNodeModel: core.rootNodeFilterModel
 
+    signal newProject
+
     Connections {
         target: core.selectionModel
         function onModelReset() {
@@ -29,37 +30,74 @@ Page {
         }
     }
 
-    Connections {
-        target: core
-        function onSetupFinished() {
-            globalLoadingSpinner.hideSpinner()
-        }
-    }
-
-    LoadingSpinner {
-        id: globalLoadingSpinner
-        z:2
-    }
-
     Dialog {
         id: generateCodedialog
 
         title: "Generate Code"
         modal: true
-        standardButtons: Dialog.Ok | Dialog.Cancel
+
         anchors.centerIn: parent
 
-        width: root.width * 0.25
-        height: root.height * 0.25
+        width: root.width * 0.5
+        height: root.height * 0.5
+
+        function setPath() {
+            let finalPath = core.appendProjectNameToPath(folderDialog.selectedFolder);
+
+            core.outputFilePath = finalPath;
+            projectJsonPathField.text = finalPath;
+        }
+
+        onOpened: {
+            setPath();
+        }
+
+        Connections {
+            target: core
+            function onGenerateCodeFinished() {
+                finishedNote.visible = true;
+                closeTimer.start();
+            }
+        }
+
+        Timer {
+            id: closeTimer
+            repeat: false
+            interval: 2000
+            onTriggered: {
+                finishedNote.visible = false;
+                generateCodedialog.close();
+            }
+        }
+
+        FlatButton {
+            visible: !closeTimer.running
+            anchors.bottom: parent.bottom
+            anchors.right: parent.right
+            text: "Ok"
+            width: generateCodedialog.font === 1 ? generateCodedialog.availableWidth / 2 : undefined
+            enabled:  projectJsonPathField.text !== "" || isWasm
+            onClicked: {
+                core.generateCode(includeCmake.checked, includeJson.checked);
+                if(saveProject.checked)
+                    core.saveProject();
+            }
+        }
 
         Overlay.modal: Rectangle {
             color: palette.window
             opacity: 0.9
         }
 
-        onAccepted: {
-             core.generateCode(includeCmake.checked, includeJson.checked);
+        FolderDialog {
+            id: folderDialog
+            title: "Select Output Folder"
+
+            onAccepted: {
+                generateCodedialog.setPath()
+            }
         }
+
 
         ColumnLayout {
             LabeledCheckbox {
@@ -71,6 +109,48 @@ Page {
                 id: includeJson
                 labelText: "Include JSON dump"
             }
+
+            LabeledCheckbox {
+                id: saveProject
+                labelText: "Include Project File"
+            }
+
+            Text {
+                text: "Output path"
+                color: palette.windowText
+            }
+
+            Row {
+                spacing: Utils.defaultSpacing
+
+                visible: !isWasm
+
+                TextField {
+                    id: projectJsonPathField
+                    placeholderText: "Set Project Output Folder"
+                    implicitWidth: Utils.preferredLabelWidth * 2
+                    color: palette.windowText
+                    readOnly: true
+                }
+
+                FlatButton {
+                    text: "Select Folder..."
+                    backgroundHeight: 20
+                    onClicked: {
+                        folderDialog.open();
+                    }
+                }
+            }
+        }
+        Text {
+            id: finishedNote
+
+            anchors.centerIn: parent
+            anchors.topMargin: Utils.normalSpacing
+            text: "Code generated!"
+            font.pointSize: 22
+            visible: false
+            color: "red"
         }
     }
 
@@ -82,6 +162,13 @@ Page {
         title: "Help"
         modal: true
         standardButtons: Dialog.Close
+        footer: DialogButtonBox {
+            visible: count > 0
+            delegate: FlatButton {
+                width: helpDialog.count === 1 ? helpDialog.availableWidth / 2 : undefined
+            }
+        }
+
         width: root.width * 0.5
         height: root.height * 0.5
 
@@ -111,7 +198,7 @@ Page {
         }
 
         Text {
-            text: "Node Selection"
+            text: core.projectName
             anchors.centerIn: parent
             color: root.palette.text
         }
@@ -121,65 +208,31 @@ Page {
 
             anchors.left: parent.left
             anchors.leftMargin: 10
-            width: isWasm ? Utils.defaultIconSize * 2 : 0
-            height: isWasm ? Utils.defaultIconSize * 2 : 0
+            width: isWasm ? Utils.defaultIconSize * 2 : Utils.defaultIconSize
+            height: isWasm ? Utils.defaultIconSize * 2 : Utils.defaultIconSize
             anchors.verticalCenter: parent.verticalCenter
             iconSource: "../Icons/help.svg"
+            visible: true
             onClicked: {
                 helpDialog.visible = !helpDialog.visible
             }
         }
 
-        FolderListModel {
-            id: folderModel
-
-            property url folderUrl: "file://" + core.nodeSetPath
-
-            folder: folderUrl
-            showDirs: true
-        }
-
-        LabeledDropdown {
-            id: compaionDropdown
+        FlatButton {
+            id: newProjectButton
 
             anchors.left: helpButton.right
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.leftMargin: Utils.defaultSpacing
+            anchors.leftMargin: 10
 
-            model: folderModel
-            textRole: "fileName"
-            labelText:  "Companion Spec:"
+            text: "New Project..."
+            implicitWidth: 150
 
-            onSelected: {
-                listView.selectedIndex = -1;
-                globalLoadingSpinner.showSpinner();
-                Qt.callLater(function() {
-                    core.selectNodeSetXML(folderModel.get(currentIndex, "filePath"));
-                });
+            buttonColor: root.palette.highlight
+
+            onClicked: {
+                newProject();
             }
         }
-
-        Button {
-            id: loadButton
-            anchors.left: compaionDropdown.right
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.leftMargin: Utils.defaultSpacing
-            text: "Load Project JSON"
-
-            onClicked: fileDialog.open();
-        }
-
-        FileDialog {
-               id: fileDialog
-               title: "Select Project File"
-               fileMode: FileDialog.OpenFile
-               nameFilters: ["JSON Files (*.json)", "All Files (*)"]
-
-               onAccepted: {
-                globalLoadingSpinner.showSpinner();
-                core.loadState(fileDialog.selectedFile);
-               }
-           }
     }
 
     footer: Rectangle {
@@ -199,20 +252,13 @@ Page {
             anchors.centerIn: parent
             anchors.margins: 10
 
-            Button {
+            FlatButton {
                 id: generateButton
 
                 text: "Generate Code"
                 onClicked: {
                     generateCodedialog.open()
                 }
-            }
-
-            Button {
-                id: saveProject
-
-                text: "Save Project"
-                onClicked: core.saveProject()
             }
         }
     }
@@ -225,7 +271,7 @@ Page {
         anchors.centerIn: parent
 
         width: root.width * 0.5
-        height: root.height * 0.5
+        height: root.height * 0.6
 
         headlineTextColor: root.palette.text
         nodeIdColor: root.palette.dark
