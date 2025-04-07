@@ -31,6 +31,8 @@ DeviceDriverCore::DeviceDriverCore()
     m_childItemFilterModel->setSourceModel(m_selectionModel);
     m_rootNodeFilterModel->setSourceModel(m_selectionModel);
 
+    m_projectName = QStringLiteral("Untitled");
+
 #ifdef ENABLE_MODEL_TESTER
     QAbstractItemModelTester* deviceTypesModeTester = new QAbstractItemModelTester(
         m_deviceTypesModel, QAbstractItemModelTester::FailureReportingMode::Fatal, nullptr);
@@ -164,9 +166,8 @@ void DeviceDriverCore::getVariableAsMustacheArray(
     jsonObj[QStringLiteral("typesArrayIndexAlias")] = QString::fromStdString(
         typesArrayIndexAliasValue);
 
-    QString filePath = m_outputFilePath
-                       + Utils::instance()->extractNameFromNamespaceString(m_selectedModelUri)
-                       + QStringLiteral(".c");
+    QString filePath = m_existingFilePath;
+    ;
     std::string readUserCodeValue = getUserCodeSegment(
                                         filePath,
                                         QStringLiteral("//BEGIN user code read ") + nameStr,
@@ -294,7 +295,7 @@ void DeviceDriverCore::getMethodAsMustacheArray(
     QString nameStr = Utils::instance()->sanitizeName(item->nodeVariableName());
 
     std::string userCodeValue = getUserCodeSegment(
-                                    m_outputFilePath,
+                                    m_existingFilePath,
                                     QStringLiteral("//BEGIN user code ") + nameStr,
                                     QStringLiteral("//END user code ") + nameStr)
                                     .toStdString();
@@ -605,8 +606,7 @@ std::pair<mustache::data, QJsonDocument> DeviceDriverCore::getCMakeMustacheData(
     QJsonObject jsonData;
 
     // TODO: Let the user set the project and executable name
-    std::string projectName
-        = Utils::instance()->extractNameFromNamespaceString(m_selectedModelUri).toStdString();
+    std::string projectName = m_projectName.toStdString();
     data["projectName"] = projectName.empty() ? mustache::data(false) : projectName;
     jsonData[QStringLiteral("projectName")] = QString::fromStdString(projectName);
 
@@ -719,21 +719,39 @@ std::string DeviceDriverCore::loadTemplateFile(const QString& filePath)
 
 void DeviceDriverCore::saveToFile(const QString& filePath, const std::string& data)
 {
-    std::ofstream outFile(filePath.toStdString());
-    if (!outFile) {
-        qWarning() << "Cannot open file for writing:" << filePath;
-        return;
+    QString path = filePath;
+    if (filePath.startsWith(QStringLiteral("file://")) || filePath.contains(QStringLiteral("://"))) {
+        path = QUrl(filePath).toLocalFile();
     }
-    outFile << data;
-    qDebug() << "File saved to:" << filePath;
+
+    QFileInfo fileInfo(path);
+    QDir dir = fileInfo.absoluteDir();
+
+    if (!dir.exists()) {
+        qDebug() << "Directory doesn't exist, creating:" << dir.absolutePath();
+        if (!dir.mkpath(QStringLiteral("."))) {
+            qWarning() << "Could not create directory:" << dir.absolutePath();
+            return;
+        }
+    }
+
+    QFile file(path);
+    if (file.open(QIODevice::WriteOnly)) {
+        file.write(data.c_str());
+        file.close();
+        qDebug() << "File saved successfully to:" << path;
+    } else {
+        qWarning() << "Could not open file for writing:" << path << "Error:" << file.errorString();
+    }
 }
 
 QString DeviceDriverCore::getUserCodeSegment(
     const QString& fileName, const QString& startMarker, const QString& endMarker)
 {
-    QFile file(fileName);
+    QString path = QUrl(fileName).toLocalFile();
+    QFile file(path);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        qWarning() << "Cannot open file:" << fileName << file.errorString();
+        qWarning() << "Cannot open file:" << path << file.errorString();
         return QString();
     }
 
@@ -767,20 +785,24 @@ void DeviceDriverCore::generateCode(bool includeCmake, bool includeJson)
     mustache::mustache codeTmpl(codeTemplate);
     mustache::mustache cmakeTmpl(cmakeTemplate);
 
-    printMustacheData(codeContext.second);
+    // printMustacheData(codeContext.second);
 
-    QString projectName = Utils::instance()->extractNameFromNamespaceString(m_selectedModelUri);
-    QString codeFilename = projectName + QStringLiteral(".c");
+    QString codeFilename = m_projectName + QStringLiteral(".c");
     QString cmakeFilename = QStringLiteral("CMakeLists.txt");
-    QString jsonFileName = projectName + QStringLiteral(".json");
+    QString jsonFileName = m_projectName + QStringLiteral(".json");
 
 #ifndef WASM_BUILD
     if (includeCmake)
-        saveToFile(m_cmakeOutputFilePath + cmakeFilename, codeTmpl.render(cmakeContext.first));
+        saveToFile(
+            m_outputFilePath + QStringLiteral("/") + cmakeFilename,
+            codeTmpl.render(cmakeContext.first));
     if (includeJson)
-        saveToJson(m_jsonOutputFilePath + jsonFileName, codeContext.second);
+        saveToJson(m_outputFilePath + QStringLiteral("/") + jsonFileName, codeContext.second);
 
-    saveToFile(m_outputFilePath + codeFilename, codeTmpl.render(codeContext.first));
+    saveToFile(
+        m_outputFilePath + QStringLiteral("/") + codeFilename, codeTmpl.render(codeContext.first));
+
+    emit generateCodeFinished();
 
     return;
 #endif
@@ -793,6 +815,8 @@ void DeviceDriverCore::generateCode(bool includeCmake, bool includeJson)
         downloadFile(cmakeFilename, cmakeFileContent);
     if (includeJson)
         downloadFile(jsonFileName, codeContext.second.toJson(QJsonDocument::Indented));
+
+    emit generateCodeFinished();
 }
 
 void DeviceDriverCore::downloadFile(const QString& fileName, const QByteArray& fileContent)
@@ -822,7 +846,23 @@ void DeviceDriverCore::saveToJson(const QString& fileName, const QJsonDocument& 
 {
     qDebug() << "Save to Json...";
 
-    QFile file(fileName);
+    QString path = fileName;
+    if (fileName.startsWith(QStringLiteral("file://")) || fileName.contains(QStringLiteral("://"))) {
+        path = QUrl(fileName).toLocalFile();
+    }
+
+    QFileInfo fileInfo(path);
+
+    QDir dir = fileInfo.absoluteDir();
+    if (!dir.exists()) {
+        if (!dir.mkpath(QStringLiteral("."))) {
+            qWarning() << "Could not create directory:" << dir.absolutePath();
+            return;
+        }
+    }
+
+    QFile file(path);
+
     if (file.open(QIODevice::WriteOnly)) {
         file.write(content.toJson());
         file.close();
@@ -1107,6 +1147,7 @@ void DeviceDriverCore::loadState(const QString& filePath)
     file.setFileName(url.toLocalFile());
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         qWarning() << "Could not open file for reading:" << filePath;
+        emit openProjectReturned(false);
         return;
     }
     QJsonDocument jsonDoc = QJsonDocument::fromJson(file.readAll());
@@ -1114,52 +1155,52 @@ void DeviceDriverCore::loadState(const QString& filePath)
 
     if (jsonDoc.isNull()) {
         qWarning() << "Failed to parse JSON from file:" << filePath;
+        emit openProjectReturned(false);
         return;
     }
 
     QJsonObject jsonObj = jsonDoc.object();
     printMustacheData(jsonDoc);
+    m_projectName = jsonObj[QStringLiteral("projectName")].toString();
     QJsonArray rootNodes = jsonObj[QStringLiteral("rootNodes")].toArray();
     QJsonArray selectedNodes = jsonObj[QStringLiteral("selectedNodes")].toArray();
 
-    connect(
-        this,
-        &DeviceDriverCore::setupFinished,
-        this,
-        [this, rootNodes, selectedNodes]() {
-            for (const QJsonValue& rootNodeVal : rootNodes) {
-                if (!rootNodeVal.isObject()) {
-                    qWarning() << "Invalid rootNode format!";
-                    continue;
-                }
-                QJsonObject rootNode = rootNodeVal.toObject();
-
-                addRootNodeToSelectionModel(
-                    rootNode[QStringLiteral("uri")].toString(),
-                    rootNode[QStringLiteral("nodeId")].toString());
-                auto node = m_selectionModel->getItemByName(
-                    rootNode[QStringLiteral("originalUniqueBrowseName")].toString());
-                node->setDisplayName(rootNode[QStringLiteral("displayName")].toString());
-                node->setBrowseName(rootNode[QStringLiteral("browseName")].toString());
-                node->setDescription(rootNode[QStringLiteral("description")].toString());
+    connect(this, &DeviceDriverCore::setupFinished, this, [this, rootNodes, selectedNodes]() {
+        for (const QJsonValue& rootNodeVal : rootNodes) {
+            if (!rootNodeVal.isObject()) {
+                qWarning() << "Invalid rootNode format!";
+                continue;
             }
+            QJsonObject rootNode = rootNodeVal.toObject();
 
-            for (const QJsonValue& selectedNodeVal : selectedNodes) {
-                if (!selectedNodeVal.isObject()) {
-                    qWarning() << "Invalid selectedNode format!";
-                    continue;
-                }
-                QJsonObject selectedNode = selectedNodeVal.toObject();
-                auto node = m_selectionModel->getItemByName(
-                    selectedNode[QStringLiteral("originalUniqueBrowseName")].toString());
-                node->setSelected(true);
-                node->setDisplayName(selectedNode[QStringLiteral("displayName")].toString());
-                node->setBrowseName(selectedNode[QStringLiteral("browseName")].toString());
-                node->setDescription(selectedNode[QStringLiteral("description")].toString());
+            addRootNodeToSelectionModel(
+                rootNode[QStringLiteral("uri")].toString(),
+                rootNode[QStringLiteral("nodeId")].toString());
+            auto node = m_selectionModel->getItemByName(
+                rootNode[QStringLiteral("originalUniqueBrowseName")].toString());
+            node->setDisplayName(rootNode[QStringLiteral("displayName")].toString());
+            node->setBrowseName(rootNode[QStringLiteral("browseName")].toString());
+            node->setDescription(rootNode[QStringLiteral("description")].toString());
+        }
+
+        for (const QJsonValue& selectedNodeVal : selectedNodes) {
+            if (!selectedNodeVal.isObject()) {
+                qWarning() << "Invalid selectedNode format!";
+                continue;
             }
-        });
+            QJsonObject selectedNode = selectedNodeVal.toObject();
+            auto node = m_selectionModel->getItemByName(
+                selectedNode[QStringLiteral("originalUniqueBrowseName")].toString());
+            node->setSelected(true);
+            node->setDisplayName(selectedNode[QStringLiteral("displayName")].toString());
+            node->setBrowseName(selectedNode[QStringLiteral("browseName")].toString());
+            node->setDescription(selectedNode[QStringLiteral("description")].toString());
+        }
+    });
 
     selectNodeSetXML(jsonObj[QStringLiteral("selectedNodeSetXML")].toString());
+
+    emit openProjectReturned(true);
 }
 
 void DeviceDriverCore::saveProject()
@@ -1168,7 +1209,7 @@ void DeviceDriverCore::saveProject()
     QJsonArray rootNodes;
     QJsonArray selectedNodes;
     QList<TreeItem*> allNodes = getSelectedItems();
-
+    data[QStringLiteral("projectName")] = m_projectName;
     data[QStringLiteral("selectedNodeSetXML")] = m_currentNodeSetDir;
 
     for (auto node : allNodes) {
@@ -1187,18 +1228,21 @@ void DeviceDriverCore::saveProject()
             selectedNodeData[QStringLiteral("displayName")] = node->displayName();
             selectedNodeData[QStringLiteral("description")] = node->description();
             selectedNodeData[QStringLiteral("browseName")] = node->browseName();
-            selectedNodeData[QStringLiteral("originalUniqueBrowseName")] = node->uniqueBaseBrowseName();
+            selectedNodeData[QStringLiteral("originalUniqueBrowseName")]
+                = node->uniqueBaseBrowseName();
             selectedNodes.append(selectedNodeData);
         }
     }
 
     data[QStringLiteral("rootNodes")] = rootNodes;
     data[QStringLiteral("selectedNodes")] = selectedNodes;
+    QString jsonFileName = m_projectName + QStringLiteral("_project.json");
+
 #ifndef WASM_BUILD
-    saveToJson(m_outputFilePath + QStringLiteral("project.json"), QJsonDocument(data));
+    saveToJson(m_outputFilePath + QStringLiteral("/") + jsonFileName, QJsonDocument(data));
     return;
 #endif
-    downloadFile(QStringLiteral("project.json"), QJsonDocument(data).toJson(QJsonDocument::Indented));
+    downloadFile(jsonFileName, QJsonDocument(data).toJson(QJsonDocument::Indented));
 }
 
 TreeModel* DeviceDriverCore::selectionModel() const
@@ -1211,19 +1255,19 @@ ChildItemFilterModel* DeviceDriverCore::childItemFilterModel() const
     return m_childItemFilterModel;
 }
 
+void DeviceDriverCore::setExistingFilePath(const QString& newExistingFilePath)
+{
+    m_existingFilePath = newExistingFilePath;
+}
+
+void DeviceDriverCore::setProjectFilePath(const QString& newProjectFilePath)
+{
+    m_projectFilePath = newProjectFilePath;
+}
+
 void DeviceDriverCore::setOutputFilePath(const QString& newOutputFilePath)
 {
     m_outputFilePath = newOutputFilePath;
-}
-
-void DeviceDriverCore::setJsonOutputFilePath(const QString& newJsonOutputFilePath)
-{
-    m_jsonOutputFilePath = newJsonOutputFilePath;
-}
-
-void DeviceDriverCore::setCmakeOutputFilePath(const QString& newCmakeOutputFilePath)
-{
-    m_cmakeOutputFilePath = newCmakeOutputFilePath;
 }
 
 void DeviceDriverCore::setMustacheTemplatePath(const QString& newMustacheTemplatePath)
@@ -1274,4 +1318,66 @@ QString DeviceDriverCore::nodeSetPath() const
 RootNodeFilterModel* DeviceDriverCore::rootNodeFilterModel() const
 {
     return m_rootNodeFilterModel;
+}
+
+QString DeviceDriverCore::projectName() const
+{
+    return m_projectName;
+}
+
+void DeviceDriverCore::setProjectName(const QString& newProjectName)
+{
+    if (m_projectName == newProjectName)
+        return;
+    m_projectName = newProjectName;
+    emit projectNameChanged();
+}
+
+QString DeviceDriverCore::projectFilePath() const
+{
+    return m_projectFilePath;
+}
+
+QString DeviceDriverCore::outputFilePath() const
+{
+    return m_outputFilePath;
+}
+
+QString DeviceDriverCore::existingFilePath() const
+{
+    return m_existingFilePath;
+}
+
+QString DeviceDriverCore::appendProjectNameToPath(const QString& basePath)
+{
+    if (basePath.isEmpty() || m_projectName.isEmpty()) {
+        return basePath;
+    }
+
+    // Combine base path and project name
+    QString projectPath = QDir(basePath).filePath(m_projectName);
+
+    // Ensure the path is unique
+    return ensureUniqueDirectory(projectPath);
+}
+
+QString DeviceDriverCore::ensureUniqueDirectory(const QString& path)
+{
+    QString filePath = QUrl(path).toLocalFile();
+    QFileInfo fileInfo(filePath);
+    int counter = 1;
+
+    QString originalPath = filePath;
+
+    while (fileInfo.exists()) {
+        filePath = originalPath + QStringLiteral("(%1)").arg(counter);
+        fileInfo.setFile(filePath);
+        counter++;
+
+        if (counter > 100) {
+            break;
+        }
+    }
+    qDebug() << "Returning:" << filePath << "input:" << path;
+    return filePath;
 }

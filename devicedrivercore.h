@@ -37,6 +37,13 @@ class DeviceDriverCore : public QObject
     Q_PROPERTY(RootNodeFilterModel* rootNodeFilterModel READ rootNodeFilterModel NOTIFY
                    rootNodeFilterModelChanged)
     Q_PROPERTY(QString nodeSetPath READ nodeSetPath WRITE setNodeSetPath NOTIFY selectionModelChanged)
+    Q_PROPERTY(QString projectName READ projectName WRITE setProjectName NOTIFY projectNameChanged)
+    Q_PROPERTY(QString projectFilePath READ projectFilePath WRITE setProjectFilePath NOTIFY
+                   projectFilePathChanged)
+    Q_PROPERTY(QString existingFilePath READ existingFilePath WRITE setExistingFilePath NOTIFY
+                   existingFilePathChanged)
+    Q_PROPERTY(QString outputFilePath READ outputFilePath WRITE setOutputFilePath NOTIFY
+                   outputFilePathChanged)
 
 public:
     DeviceDriverCore();
@@ -50,6 +57,7 @@ public:
     Q_INVOKABLE void saveToJson(const QString& fileName, const QJsonDocument& content);
     Q_INVOKABLE void loadState(const QString& filePath);
     Q_INVOKABLE void saveProject();
+    Q_INVOKABLE QString appendProjectNameToPath(const QString& basePath);
 
     TreeModel* deviceTypesModel() const;
     std::shared_ptr<UANode> findNodeById(const QString& namespaceString, const QString& nodeId) const;
@@ -62,21 +70,39 @@ public:
 
     ChildItemFilterModel* childItemFilterModel() const;
 
+    void setExistingFilePath(const QString& newexistingFilePath);
     void setOutputFilePath(const QString& newOutputFilePath);
-    void setJsonOutputFilePath(const QString& newJsonOutputFilePath);
 
     QString nodeSetPath() const;
 
     RootNodeFilterModel* rootNodeFilterModel() const;
 
-    void setCmakeOutputFilePath(const QString& newCmakeOutputFilePath);
-
     void printMustacheData(const QJsonDocument& jsonDoc);
+    QString projectName() const;
+    void setProjectName(const QString& newProjectName);
+
+    QString generatedCFilePath() const;
+    void setGeneratedCFilePath(const QString& newGeneratedCFilePath);
+
+    QString projectFilePath() const;
+    void setProjectFilePath(const QString& newProjectFilePath);
+
+    QString outputFilePath() const;
+
+    QString existingFilePath() const;
+
 signals:
     void selectionModelChanged();
     void childItemFilterModelChanged();
     void rootNodeFilterModelChanged();
     void setupFinished();
+    void projectNameChanged();
+    void generatedCFilePathChanged();
+    void projectFilePathChanged();
+    void outputFilePathChanged();
+    void existingFilePathChanged();
+    void openProjectReturned(const bool& success);
+    void generateCodeFinished();
 
 private:
     TreeModel* m_deviceTypesModel = nullptr;
@@ -89,16 +115,18 @@ private:
     QString m_nodeSetPath;
     QString m_mustacheTemplatePath;
     QString m_cmakeMustacheTemplatePath;
+    QString m_existingFilePath;
+    QString m_projectFilePath;
     QString m_outputFilePath;
-    QString m_jsonOutputFilePath;
-    QString m_cmakeOutputFilePath;
     QString m_selectedModelUri;
     QString m_currentNodeSetDir;
+    QString m_projectName;
 
     QStringList findRequiredModels(const QString& fileName);
     QStringList findRequiredFiles(const QStringList& models, bool xmlOnly = true);
     QStringList getAllNodesetFiles(const QString& dir);
     QString getNodeSetXmlFile(const QString& dir);
+    QString ensureUniqueDirectory(const QString& path);
 
     void parseNodeSets(const QString& nodeSetDir);
     void resolveNodeReferences(
