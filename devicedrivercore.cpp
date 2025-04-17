@@ -462,6 +462,8 @@ DeviceDriverCore::getMustacheData()
     // Namespace mapping
     QMap<int, QString> namespaceMap;
 
+    std::string projectName = m_projectName.toStdString();
+    data["projectName"] = projectName.empty() ? mustache::data(false) : projectName;
     std::string nsCountValue = std::to_string(m_nodeSets.size());
     data["nsCount"] = nsCountValue.empty() ? mustache::data(false) : nsCountValue;
     jsonData[QStringLiteral("nsCount")] = QString::fromStdString(nsCountValue);
@@ -704,6 +706,16 @@ void DeviceDriverCore::printMustacheData(const QJsonDocument& jsonDoc)
     qDebug().noquote() << formattedData;
 }
 
+QString DeviceDriverCore::readMeMustacheTemplatePath() const
+{
+    return m_readMeMustacheTemplatePath;
+}
+
+void DeviceDriverCore::setReadMeMustacheTemplatePath(const QString& newReadMeMustacheTemplatePath)
+{
+    m_readMeMustacheTemplatePath = newReadMeMustacheTemplatePath;
+}
+
 std::string DeviceDriverCore::loadTemplateFile(const QString& filePath)
 {
     std::ifstream fileStream(filePath.toStdString());
@@ -779,17 +791,22 @@ void DeviceDriverCore::generateCode(bool includeCmake, bool includeJson)
 
     auto codeTemplate = loadTemplateFile(m_mustacheTemplatePath);
     auto cmakeTemplate = loadTemplateFile(m_cmakeMustacheTemplatePath);
+    auto readMeTemplate = loadTemplateFile(m_readMeMustacheTemplatePath);
 
     auto codeContext = getMustacheData();
     auto cmakeContext = getCMakeMustacheData();
+    auto readMeContext = getMustacheData();
+
     mustache::mustache codeTmpl(codeTemplate);
     mustache::mustache cmakeTmpl(cmakeTemplate);
+    mustache::mustache readMeTmpl(readMeTemplate);
 
     // printMustacheData(codeContext.second);
 
     QString codeFilename = m_projectName + QStringLiteral(".c");
     QString cmakeFilename = QStringLiteral("CMakeLists.txt");
     QString jsonFileName = m_projectName + QStringLiteral(".json");
+    QString readMeFilename = QStringLiteral("README.md");
 
 #ifndef WASM_BUILD
     if (includeCmake)
@@ -802,6 +819,10 @@ void DeviceDriverCore::generateCode(bool includeCmake, bool includeJson)
     saveToFile(
         m_outputFilePath + QStringLiteral("/") + codeFilename, codeTmpl.render(codeContext.first));
 
+    saveToFile(
+        m_outputFilePath + QStringLiteral("/") + readMeFilename,
+        readMeTmpl.render(readMeContext.first));
+
     emit generateCodeFinished();
 
     return;
@@ -809,12 +830,16 @@ void DeviceDriverCore::generateCode(bool includeCmake, bool includeJson)
 
     QByteArray codeFileContent = QByteArray::fromStdString(codeTmpl.render(codeContext.first));
     QByteArray cmakeFileContent = QByteArray::fromStdString(cmakeTmpl.render(cmakeContext.first));
+    QByteArray readMeFileContent
+        = QByteArray::fromStdString(readMeTmpl.render(readMeContext.first));
 
     downloadFile(codeFilename, codeFileContent);
     if (includeCmake)
         downloadFile(cmakeFilename, cmakeFileContent);
     if (includeJson)
         downloadFile(jsonFileName, codeContext.second.toJson(QJsonDocument::Indented));
+
+    downloadFile(readMeFilename, readMeFileContent);
 
     emit generateCodeFinished();
 }
