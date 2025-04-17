@@ -90,6 +90,9 @@ public:
     QString outputFilePath() const;
 
     QString existingFilePath() const;
+    
+    QString readMeMustacheTemplatePath() const;
+    void setReadMeMustacheTemplatePath(const QString& newReadMeMustacheTemplatePath);
 
 signals:
     void selectionModelChanged();
@@ -117,6 +120,7 @@ private:
     QString m_cmakeMustacheTemplatePath;
     QString m_existingFilePath;
     QString m_projectFilePath;
+    QString m_readMeMustacheTemplatePath;
     QString m_outputFilePath;
     QString m_selectedModelUri;
     QString m_currentNodeSetDir;

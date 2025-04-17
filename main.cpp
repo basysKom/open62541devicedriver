@@ -79,7 +79,6 @@ int main(int argc, char* argv[])
 
     DeviceDriverCore core;
 
-// TODO let the user set those paths. Do not hardcode them depending on the build path
 #ifdef WASM_BUILD
     bool isWasm = true;
     core.setNodeSetPath(
@@ -89,6 +88,11 @@ int main(int argc, char* argv[])
     core.setCmakeMustacheTemplatePath(
         QDir(QCoreApplication::applicationDirPath())
             .filePath(QStringLiteral("/templates/CMakeLists.mustache")));
+
+    core.setReadMeMustacheTemplatePath(
+        QDir(QCoreApplication::applicationDirPath())
+            .filePath(QStringLiteral("/templates/README.mustache")));
+
 #else
     bool isWasm = false;
     core.setNodeSetPath(
@@ -99,6 +103,10 @@ int main(int argc, char* argv[])
     core.setCmakeMustacheTemplatePath(
         QDir(QCoreApplication::applicationDirPath())
             .filePath(QStringLiteral("../../templates/CMakeLists.mustache")));
+    core.setReadMeMustacheTemplatePath(
+        QDir(QCoreApplication::applicationDirPath())
+            .filePath(QStringLiteral("../../templates/README.mustache")));
+                    
 #endif
 
     core.setOutputFilePath(QDir(QCoreApplication::applicationDirPath()).path());
