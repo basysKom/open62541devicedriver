@@ -19,7 +19,7 @@ Item {
     property alias iconSource: icon.source
     property alias content: content.data
     property var disabledFields: ["nodeId"]
-    
+
     signal beforeSelectionChanging
 
     clip: true
@@ -72,29 +72,48 @@ Item {
             model: sourceItem ? sourceItem.userInputMask : null
 
             delegate:
+                Column {
+                id: detailsDelegate
+
+                property bool isInvald: false
+
                 LabeledInput {
+                    id: labeledInput
+
                     enabled: disabledFields.indexOf(modelData) === -1
                     labelText: modelData + ":"
                     placeHolderText: "Enter " + modelData
                     textFieldText: root.sourceItem[modelData] ? root.sourceItem[modelData] : ""
                     onEditingFinished: {
+
                         if (modelData === "browseName" && textFieldText !== root.sourceItem[modelData]) {
                             var isUnique = core.selectionModel.isBrowseNameUnique(textFieldText)
                             if (!isUnique) {
-                                // TODO make an alert or something
                                 console.log("Name already exists")
-                                textFieldText = ""
+                                detailsDelegate.isInvald = true;
                                 return
                             }
                         }
                         root.sourceItem[modelData] = textFieldText
                     }
 
-                Connections {
-                    target: root
-                    function onBeforeSelectionChanging() {
-                        editingFinished()
+                    Connections {
+                        target: root
+                        function onBeforeSelectionChanging() {
+                            labeledInput.editingFinished()
+                            detailsDelegate.isInvald = false;
+                        }
                     }
+                }
+
+                Text {
+                    id: warningText
+
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    color: "red"
+                    text: "Name already exists!"
+
+                    visible: detailsDelegate.isInvald
                 }
             }
         }

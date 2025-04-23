@@ -395,8 +395,6 @@ QString TreeItem::typeName() const
 
 QStringList TreeItem::userInputMask() const
 {
-    // FIXME refactor this. Some fields should not be editable
-    //TODO Use property and role for this?
     if (UAVariable* variable = dynamic_cast<UAVariable*>(m_node.get())) {
         return {
             QStringLiteral("displayName"),

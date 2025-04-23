@@ -53,7 +53,6 @@ Rectangle {
             id: contextMenu
 
             MenuItem {
-                // FIXME implement this
                 text: "Remove from selection"
                 onTriggered: {
                     select(-1)
