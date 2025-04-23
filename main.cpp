@@ -15,7 +15,6 @@
 
 void messageHandler(QtMsgType type, const QMessageLogContext& context, const QString& msg)
 {
-    // TODO see other comment about paths
     QFile file(
         QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("../../logs/app.log")));
 
@@ -60,7 +59,6 @@ void messageHandler(QtMsgType type, const QMessageLogContext& context, const QSt
         << Qt::endl;
 
     // Also write to the console
-    // TODO make this optional
     QTextStream console(stdout);
     console << QStringLiteral("[%1] [%2] (%3:%4) %5")
                    .arg(timestamp)
@@ -89,9 +87,8 @@ int main(int argc, char* argv[])
         QDir(QCoreApplication::applicationDirPath())
             .filePath(QStringLiteral("/templates/CMakeLists.mustache")));
 
-    core.setReadMeMustacheTemplatePath(
-        QDir(QCoreApplication::applicationDirPath())
-            .filePath(QStringLiteral("/templates/README.mustache")));
+    core.setReadMeMustacheTemplatePath(QDir(QCoreApplication::applicationDirPath())
+                                           .filePath(QStringLiteral("/templates/README.mustache")));
 
 #else
     bool isWasm = false;
@@ -106,7 +103,7 @@ int main(int argc, char* argv[])
     core.setReadMeMustacheTemplatePath(
         QDir(QCoreApplication::applicationDirPath())
             .filePath(QStringLiteral("../../templates/README.mustache")));
-                    
+
 #endif
 
     core.setOutputFilePath(QDir(QCoreApplication::applicationDirPath()).path());

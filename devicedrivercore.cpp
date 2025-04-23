@@ -291,7 +291,6 @@ void DeviceDriverCore::getMethodAsMustacheArray(
     nodeMap["outputArguments"] = outputArgumentsArray;
     jsonObj[QStringLiteral("outputArguments")] = jsonOutputArgumentsArray;
 
-    // FIXME use the user input here for variable name
     QString nameStr = Utils::instance()->sanitizeName(item->nodeVariableName());
 
     std::string userCodeValue = getUserCodeSegment(
@@ -607,7 +606,7 @@ std::pair<mustache::data, QJsonDocument> DeviceDriverCore::getCMakeMustacheData(
     mustache::data data;
     QJsonObject jsonData;
 
-    // TODO: Let the user set the project and executable name
+    // Project name is set by the user at start of a new project
     std::string projectName = m_projectName.toStdString();
     data["projectName"] = projectName.empty() ? mustache::data(false) : projectName;
     jsonData[QStringLiteral("projectName")] = QString::fromStdString(projectName);
@@ -830,8 +829,7 @@ void DeviceDriverCore::generateCode(bool includeCmake, bool includeJson)
 
     QByteArray codeFileContent = QByteArray::fromStdString(codeTmpl.render(codeContext.first));
     QByteArray cmakeFileContent = QByteArray::fromStdString(cmakeTmpl.render(cmakeContext.first));
-    QByteArray readMeFileContent
-        = QByteArray::fromStdString(readMeTmpl.render(readMeContext.first));
+    QByteArray readMeFileContent = QByteArray::fromStdString(readMeTmpl.render(readMeContext.first));
 
     downloadFile(codeFilename, codeFileContent);
     if (includeCmake)
