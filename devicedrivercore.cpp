@@ -811,7 +811,7 @@ void DeviceDriverCore::generateCode(bool includeCmake, bool includeJson)
     if (includeCmake)
         saveToFile(
             m_outputFilePath + QStringLiteral("/") + cmakeFilename,
-            codeTmpl.render(cmakeContext.first));
+            cmakeTmpl.render(cmakeContext.first));
     if (includeJson)
         saveToJson(m_outputFilePath + QStringLiteral("/") + jsonFileName, codeContext.second);
 
