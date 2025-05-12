@@ -166,6 +166,7 @@ git clone --recursive XXX
 
 - Qt 6.8.2
 - For WebAssembly use Emscripten v. 3.1.56
+- Open62541 v1.4.10
 
 ## Building
 

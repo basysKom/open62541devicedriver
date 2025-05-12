@@ -1393,7 +1393,7 @@ QString DeviceDriverCore::ensureUniqueDirectory(const QString& path)
     QString originalPath = filePath;
 
     while (fileInfo.exists()) {
-        filePath = originalPath + QStringLiteral("(%1)").arg(counter);
+        filePath = originalPath + QStringLiteral("_%1").arg(counter);
         fileInfo.setFile(filePath);
         counter++;
 
